@@ -522,7 +522,7 @@ const me=()=>S.goccia?{name:"지우",plan:"Goccia",email:"kid"}:S.user;
 const allAgents=()=>[...S.myAgents,...OFFICIAL];
 const agentById=id=>allAgents().find(a=>a.id===id);
 /* ---------- router ---------- */
-const ROUTES=["tool-translate","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian"];
+const ROUTES=["tool-translate","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin"];
 const PUBLIC=["login","join","verify","kid","terms"];
 function route(){const h=location.hash.slice(1);return ROUTES.includes(h)?h:(S.user?"home":"login");}
 function go(r){if(location.hash==="#"+r)render();else location.hash=r;}
@@ -619,7 +619,7 @@ function delConfirm(c){return `<div class="confirm" style="margin:4px 4px 8px">"
 function acctMenu(){const kid=S.goccia;const plan=S.user.plan||"Free";const it=(k,t,attr,right="")=>`<button class="opt" ${attr}>${ic(k,17)}<span class="grow">${t}</span>${right}</button>`;
 return `<div class="acctwrap" data-act="acct"></div><div class="acct" role="menu" aria-label="계정 메뉴"><div class="acchead">${esc(kid?"지우 · LAGO Goccia":S.user.email)}</div>
 ${kid?it("swap",esc(S.user.name)+" 계정으로 돌아가기",'data-act="asMe"')+it("file","이용약관",'data-go="terms"'):
-it("sliders","설정",'data-go="prefs"','<span class="kb">Ctrl+,</span>')+it("gauge","사용량",'data-go="usage"')+it("globe","언어",'data-act="lang"','<span class="kb">한국어</span>')+it("help","도움 받기",'data-act="help"')+"<hr>"+
+it("sliders","설정",'data-go="prefs"','<span class="kb">Ctrl+,</span>')+it("gauge","사용량",'data-go="usage"')+(isAdmin()?it("shield","관리자",'data-go="admin"'):"")+it("globe","언어",'data-act="lang"','<span class="kb">한국어</span>')+it("help","도움 받기",'data-act="help"')+"<hr>"+
 (plan==="Max"?it("crown","플랜 관리",'data-go="plans"','<span class="maxtag">MAX</span>'):it("upc","플랜 업그레이드",'data-go="plans"'))+it("download","앱 및 확장 프로그램 다운로드",'data-act="dl"')+it("info","더 알아보기",'data-act="more"',ic("right",14))+"<hr>"+
 it("shield","보호자 화면",'data-go="guardian"',pendingReq()?'<span class="maxtag" style="background:#FDE8E4;color:#C0392B;border-color:transparent">요청 '+pendingReq()+'</span>':'<span class="kb">지우</span>')+it("file","이용약관",'data-go="terms"')}
 <hr>${it("logout","로그아웃",'data-act="logout"')}</div>`;}
@@ -858,6 +858,40 @@ return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max
 <div class="row" style="align-items:flex-start;flex-wrap:wrap;gap:12px"><div class="grow"><h1>예약 작업</h1><p class="muted" style="margin:0">정한 시간에 LAGO가 대신 물어보고, 답을 대화로 남겨 줘요.</p></div><button class="btn pri" data-act="taskNew">${ic("plus",16)} 새 예약 작업</button></div>
 <div class="note">${ic("info",16)}<span>지금은 예시 단계예요. 자동 실행 서버는 아직 연결 전이라, <b>지금 실행</b>으로 결과 모양을 먼저 확인해 보세요.</span></div>
 ${form}${list||(S.taskNew?"":`<div class="card" style="display:grid;gap:12px;text-align:center;padding:36px 20px"><b>아직 예약 작업이 없어요</b><span class="muted" style="font-size:13px">아래 예시로 바로 시작해 볼 수 있어요.</span><div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px">${TPL.map((x,i)=>`<button class="chip" data-tpl="${i}">${esc(x[0])}</button>`).join("")}</div></div>`)}</div></div>`);}
+
+/* ---- 관리자 ---- */
+const ADMIN_MAIL="lagem1535@gmail.com";
+function isAdmin(){return !!(S.fb&&S.user&&S.user.uid&&String(S.user.email||"").toLowerCase()===ADMIN_MAIL);}
+async function admFetch(path,method,body){const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch(path,{method:method||"GET",headers:{"content-type":"application/json",authorization:"Bearer "+tk},body:body?JSON.stringify(body):undefined});let j={};try{j=await r.json();}catch(e){}if(!r.ok)throw new Error(j.error||("오류 "+r.status));return j;}
+async function loadAdmin(){if(!isAdmin()||S.admin&&S.admin.loading)return;S.admin=Object.assign(S.admin||{},{loading:true,err:""});try{const j=await admFetch("/api/admin/status");S.admin={status:j,loading:false,err:"",at:Date.now()};}catch(e){S.admin={loading:false,err:e.message,at:Date.now()};}if(route()==="admin")render();}
+const ADM_SECRETS=[["RESEND_API_KEY","Resend 키","보호자·아이 메일 보내기에 써요. re_ 로 시작해요.","password","re_..."],["MAIL_FROM","보내는 사람","예: LAGO &lt;noreply@내도메인.com&gt;. 도메인을 Resend에서 인증해야 아무에게나 보낼 수 있어요. 비워 두면 기본 주소를 써요.","text","LAGO <noreply@example.com>"],["DATA_GO_KR_KEY","공공데이터 키","공공데이터포털(data.go.kr) 일반 인증키(Decoding)예요. 공휴일 답에 써요.","password","인증키"]];
+const ADM_STATS=[["visits","접속"],["wiki","위키 검색"],["holidays","공휴일 조회"],["kidConsent","아이 가입 요청"],["notify","시간 요청 알림"],["mailSent","메일 성공"],["mailFail","메일 실패"]];
+function vAdmin(){
+if(!isAdmin())return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:560px"><h1>관리자</h1><p class="muted">관리자 계정(${ADMIN_MAIL})으로 로그인해야 볼 수 있어요. 이 화면은 실제 서버에 연결된 사이트에서만 동작해요.</p><button class="btn" data-go="home">홈으로</button></div></div>`);
+if(!S.admin||Date.now()-(S.admin.at||0)>60000&&!S.admin.loading)setTimeout(loadAdmin,0);
+const a=S.admin||{},st=a.status;
+let body="";
+if(a.loading&&!st)body=`<p class="muted">불러오는 중…</p>`;
+else if(a.err&&!st)body=`<div class="notice" style="border:1px solid #F3C9C9;background:#FFF5F5;color:#B42318;padding:12px 14px;border-radius:12px;font-size:13.5px">${esc(a.err)}</div>`;
+else if(st){
+const tot={},today=st.days[0]||{};st.days.forEach(d=>ADM_STATS.forEach(([k])=>tot[k]=(tot[k]||0)+(d[k]||0)));
+const card=([k,l])=>`<div class="card" style="padding:14px 16px"><div class="muted" style="font-size:12.5px">${l}</div><div style="font-size:24px;font-weight:700;color:#0B1F55">${today[k]||0}</div><div class="muted" style="font-size:12px">14일 합계 ${tot[k]||0}</div></div>`;
+const sec=([k,l,h,ty,ph])=>{const x=st.secrets[k]||{};const chip=x.set?`<span class="tag" style="background:#E8F5EC;color:#1F8A4C">설정됨 ${esc(x.hint)} · ${x.source==="dashboard"?"Cloudflare 대시보드":"관리자 화면"}</span>`:`<span class="tag" style="background:#FFF3E0;color:#B45309">없음</span>`;
+const edit=x.canEdit?`<form data-secret="${k}" class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px"><input class="inp" type="${ty}" autocomplete="off" placeholder="${esc(ph)}" style="flex:1;min-width:200px" required><button class="btn sm pri" type="submit">${x.set?"바꾸기":"저장"}</button>${x.source==="admin"?`<button class="btn sm danger" type="button" data-act="admDel" data-name="${k}">지우기</button>`:""}</form>`:`<p class="muted" style="font-size:12.5px;margin:10px 0 0">${x.set?"Cloudflare 대시보드에 넣은 값이 우선이라 여기서는 바꿀 수 없어요.":"저장 공간(ADMIN_KV)이 연결되지 않았어요."}</p>`;
+return `<div class="card" style="padding:16px"><div class="row" style="gap:10px;flex-wrap:wrap"><b class="grow" style="min-width:140px">${l}<span class="muted" style="font-weight:400;font-size:12px"> · ${k}</span></b>${chip}</div><p class="muted" style="font-size:13px;margin:6px 0 0">${h}</p>${edit}</div>`;};
+const rows=st.days.map(d=>`<tr><td>${d.date.slice(5)}</td>${ADM_STATS.map(([k])=>`<td>${d[k]||0}</td>`).join("")}</tr>`).join("");
+body=`${st.kv?"":`<div class="notice" style="border:1px solid #F3C9C9;background:#FFF5F5;color:#B42318;padding:12px 14px;border-radius:12px;font-size:13.5px">사용량 기록과 키 저장에 쓰는 ADMIN_KV가 연결되지 않았어요. wrangler.jsonc의 kv_namespaces를 확인해 주세요.</div>`}
+<h2 style="margin:6px 0 0;font-size:16px">오늘 사용량 <span class="muted" style="font-weight:400;font-size:12.5px">(한국 시간 기준)</span></h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${ADM_STATS.map(card).join("")}</div>
+<h2 style="margin:10px 0 0;font-size:16px">키와 설정</h2>
+${ADM_SECRETS.map(sec).join("")}
+<div class="card" style="padding:16px"><div class="row" style="gap:10px;flex-wrap:wrap"><div class="grow" style="min-width:200px"><b>테스트 메일</b><p class="muted" style="font-size:13px;margin:4px 0 0">내 이메일(${esc(st.email||ADMIN_MAIL)})로 테스트 메일을 보내요.</p></div><button class="btn sm" data-act="admTest" ${st.secrets.RESEND_API_KEY&&st.secrets.RESEND_API_KEY.set?"":"disabled"}>보내기</button></div></div>
+<h2 style="margin:10px 0 0;font-size:16px">최근 14일</h2>
+<div class="card" style="padding:6px 10px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap"><thead><tr style="text-align:left;color:#64708A"><th style="padding:8px 6px;font-weight:600">날짜</th>${ADM_STATS.map(([,l])=>`<th style="padding:8px 6px;font-weight:600">${l}</th>`).join("")}</tr></thead><tbody class="admtb">${rows}</tbody></table></div>
+<p class="muted" style="font-size:12.5px">접속은 앱을 열 때마다 1씩 올라가요(같은 사람이 여러 번 열면 여러 번 세요). 가입자 수와 대화 수는 개인정보라 서버에서 세지 않아요. 가입자 수는 Firebase 콘솔 → Authentication에서 보세요.</p>`;
+}
+return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:860px;display:grid;gap:14px">
+<div class="row" style="flex-wrap:wrap"><div class="grow"><h1>관리자</h1><p class="muted" style="margin:0">${esc(ADMIN_MAIL)} · 키는 브라우저에 저장되지 않고 서버(Cloudflare KV)에만 저장돼요</p></div><button class="btn sm" data-act="admRefresh">새로고침</button></div>${body}</div></div>`);}
 function vUsage(){const plan=S.user.plan||"Free",lim=LIMITS[plan],pct=usagePct(),used=Math.round(lim*pct/100);
 const now=new Date(),mid=new Date(now);mid.setHours(24,0,0,0);const ms=mid-now,hh=Math.floor(ms/36e5),mm=Math.floor(ms%36e5/6e4);
 const by=[["FACT",.46,"#2BA3B8"],["빠른 생각",.27,"#1B3E9E"],["THINK",.17,"#4A5FA8"],["CODE",.10,"#1F8A4C"]];
@@ -927,7 +961,7 @@ if(!S.user&&!PUBLIC.includes(r)){location.hash="login";return;}
 if(S.user&&(r==="login"||r==="join")){location.hash="home";return;}
 if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-extract","tool-summary"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");location.hash="home";return;}
 if(r==="code"||r==="code-chat"||r==="code-folder")S.area="code";else if(["home","chat","projects","project","agents","agent","agent-new"].includes(r))S.area="talk";
-const v={"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
+const v={"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
 const html=v();if(!html)return;$("#app").innerHTML=html;
 const sc=$("#sc");if(sc)sc.scrollTop=sc.scrollHeight;
 if($("#bc"))startBrand();
@@ -988,6 +1022,9 @@ case"temp":{if(S.temp&&S.chats.some(c=>c.temp)){S.tempAsk=true;render();break;}S
  else{toast("임시 대화를 켰어요. 기록에 남지 않고 학습에도 쓰지 않아요.");if(inChat){S.cur=null;go(S.area==="code"?"code":"home");break;}}
  render();break;}
 case"acct":S.acct=!S.acct;render();break;
+case"admRefresh":S.admin=null;loadAdmin();render();break;
+case"admDel":try{await admFetch("/api/admin/secret/delete","POST",{name:d.name});toast("지웠어요");S.admin=null;loadAdmin();}catch(er){toast(er.message);}break;
+case"admTest":try{t.disabled=true;await admFetch("/api/admin/test-mail","POST",{});toast("테스트 메일을 보냈어요. 받은편지함을 확인해 주세요");S.admin=null;loadAdmin();}catch(er){toast(er.message);}t.disabled=false;break;
 case"tempEnd":if(S.chats.some(c=>c.temp)){S.tempAsk=true;render();}else{S.temp=false;S.cur=null;toast("임시 대화를 끝냈어요");go(S.area==="code"?"code":"home");}break;
 case"tempAskNo":S.tempAsk=false;render();break;
 case"tempEndYes":S.tempAsk=false;S.temp=false;S.chats=S.chats.filter(c=>!c.temp);S.cur=null;toast("임시 대화를 지우고 끝냈어요");go(S.area==="code"?"code":"home");break;
@@ -1058,6 +1095,7 @@ if((e.ctrlKey||e.metaKey)&&e.key===","&&S.user&&!S.goccia){e.preventDefault();go
 if(e.key==="Escape"&&(S.cmenu||S.share||S.renameChat||S.delChat)){S.cmenu=null;S.share=null;S.renameChat=null;S.delChat=null;S.flyout=false;render();return;}
 if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&S.user){e.preventDefault();S.cur=null;go(S.area==="code"?"code":"home");}});
 document.addEventListener("submit",async e=>{const f=e.target;e.preventDefault();
+if(f.dataset&&f.dataset.secret){const inp=f.querySelector("input"),btn=f.querySelector("button[type=submit]");btn.disabled=true;try{await admFetch("/api/admin/secret","POST",{name:f.dataset.secret,value:inp.value});toast("저장했어요");S.admin=null;loadAdmin();if(S.fb){const r=await fetch("/api/config",{cache:"no-store"});if(r.ok)S.api=await r.json();}render();}catch(er){toast(er.message);btn.disabled=false;}return;}
 if(f.id==="composer"){send($("#q").value);return;}
 if(f.id==="todoForm"){const v=$("#todoIn").value.trim();if(v){S.todos.push({t:v,d:false});render();setTimeout(()=>$("#todoIn")&&$("#todoIn").focus(),0);}return;}
 if(f.id==="loginForm"){const em=$("#le").value.trim().toLowerCase(),pw=$("#lp").value,err=$("#lerr");
