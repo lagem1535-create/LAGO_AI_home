@@ -28,29 +28,51 @@ function readFirebase(env) {
 }
 
 // ---------- 위키백과 (키 필요 없음) ----------
-async function wiki(q) {
+// 질문에서 주제어만 뽑기: "독도는 어디에 있어?" -> "독도"
+function topicOf(q) {
+  let t = String(q).replace(/[?？!.,~"'`]/g, " ");
+  t = t.replace(/(은|는|이|가|을|를|의|에|에서|에게|도|만)?\s*(어디(에)?\s*(있어|있나요|있니|있는지|야|예요|인가요)?|누구(야|예요|인가요|니)?|누가\s*만들었(어|나요|니)?|언제(야|예요|인가요|였어|였나요)?|뭐(야|예요|가\s*뭐야)?|무엇(인가요|이에요|입니까)?|뭔가요|몇\s*(살|개|명)?(이야|인가요)?|왜(야|그래)?|어떻게\s*(돼|되나요|해|하나요)?|알려\s*줘(요)?|설명해\s*줘(요)?|쉽게|자세히|대해(서)?\s*(알려\s*줘|설명해\s*줘|말해\s*줘)?|궁금해(요)?|이란|란|에\s*대해)/g, " ");
+  t = t.replace(/\s+/g, " ").trim();
+  t = t.replace(/(은|는|이|가|을|를|의)$/, "").trim();
+  return t || String(q).trim();
+}
+const META = /^(이 (문서|항목|글)|본 (문서|항목)|다음은|다음 문서|이 문서에서는|.*(문서|항목)(에서는|는|은)\s.*(정리|서술|다룬))/;
+function cleanExtract(txt) {
+  const sents = String(txt || "").split(/(?<=[.다요])\s+/).filter((x) => x && !META.test(x.trim()));
+  return sents.join(" ").trim();
+}
+async function wiki(q0) {
   const base = "https://ko.wikipedia.org";
   const h = { "user-agent": UA, accept: "application/json" };
-  // 1) 검색해서 가장 알맞은 문서 제목 찾기
+  const q = topicOf(q0);
+  const sum = async (title) => {
+    const r = await fetch(`${base}/api/rest_v1/page/summary/${encodeURIComponent(String(title).replace(/ /g, "_"))}?redirect=true`, { headers: h, cf: { cacheTtl: 3600 } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!d || d.type === "disambiguation" || d.type === "no-extract") return null;
+    const ex = cleanExtract(d.extract);
+    if (!ex) return null;
+    return { title: d.title, extract: ex, url: d.content_urls?.desktop?.page || `${base}/wiki/${encodeURIComponent(d.title)}` };
+  };
+  const out = [];
+  const seen = new Set();
+  const push = (x) => { if (x && !seen.has(x.title)) { seen.add(x.title); out.push(x); } };
+  // 1) 주제어와 이름이 같은 문서를 먼저
+  try { push(await sum(q)); } catch {}
+  // 2) 검색 결과 중 주제어와 관련 있는 것만 (제목에 주제어 포함, 또는 문서 앞부분에 주제어 언급)
   const s = await fetch(
-    `${base}/w/api.php?action=query&list=search&format=json&srlimit=3&utf8=1&srsearch=${encodeURIComponent(q)}`,
+    `${base}/w/api.php?action=query&list=search&format=json&srlimit=5&utf8=1&srsearch=${encodeURIComponent(q)}`,
     { headers: h, cf: { cacheTtl: 3600 } }
   );
-  if (!s.ok) throw new Error("wiki search " + s.status);
-  const hits = (await s.json())?.query?.search || [];
-  if (!hits.length) return { found: false, q };
-  // 2) 문서 요약 가져오기
-  const out = [];
-  for (const hit of hits.slice(0, 2)) {
-    const r = await fetch(`${base}/api/rest_v1/page/summary/${encodeURIComponent(hit.title.replace(/ /g, "_"))}`, {
-      headers: h,
-      cf: { cacheTtl: 3600 },
-    });
-    if (!r.ok) continue;
-    const d = await r.json();
-    out.push({ title: d.title, extract: d.extract, url: d.content_urls?.desktop?.page || `${base}/wiki/${encodeURIComponent(hit.title)}` });
+  if (!s.ok && !out.length) throw new Error("wiki search " + s.status);
+  const hits = s.ok ? (await s.json())?.query?.search || [] : [];
+  const words = q.split(/\s+/).filter((w) => w.length > 0);
+  const relevant = (hit) => words.some((w) => hit.title.toLowerCase().includes(w.toLowerCase()));
+  for (const hit of hits.filter(relevant)) {
+    if (out.length >= 3) break;
+    try { push(await sum(hit.title)); } catch {}
   }
-  return { found: out.length > 0, q, results: out };
+  return { found: out.length > 0, q, topic: q, results: out.slice(0, 3) };
 }
 
 // ---------- 공공데이터포털 예시: 한국천문연구원 특일 정보(공휴일) ----------
@@ -367,8 +389,7 @@ async function answerText(env, q) {
     if (!j.items) return "공휴일 정보를 가져오지 못했어요.";
     return `${yy}년 ${mm}월 공휴일\n\n` + (j.items.length ? j.items.map((i) => `· ${+i.date.slice(4, 6)}월 ${+i.date.slice(6)}일 ${i.name}`).join("\n") : "이 달에는 공휴일이 없어요.") + "\n\n출처: 공공데이터포털 · 한국천문연구원 특일 정보";
   }
-  const kw = q.replace(/[?？!.]/g, " ").replace(/(은|는|이|가|을|를|에 대해|에대해)?\s*(누가 만들었어|누가 만들었나요|뭐야|무엇인가요|뭔가요|알려 ?줘|설명해 ?줘|쉽게|자세히)/g, " ").replace(/\s+/g, " ").trim() || q;
-  const r = await wiki(kw);
+  const r = await wiki(q);
   if (!r.found) return `“${q}”에 대해 위키백과에서 찾지 못했어요. 질문을 더 짧은 단어로 바꿔 보세요.`;
   const top = r.results[0];
   return `${top.title}\n\n${(top.extract || "").split(/(?<=[.다요])\s+/).slice(0, 3).join(" ")}\n\n출처: ${top.url}`;
@@ -498,6 +519,11 @@ async function adminStatus(env, raw) {
     const fromEnv = !!raw[n];
     const kv = env.ADMIN_KV ? await env.ADMIN_KV.get("secret:" + n) : null;
     secrets[n] = { set: fromEnv || !!kv, source: fromEnv ? "dashboard" : kv ? "admin" : null, hint: hint(raw[n] || kv || "", n), canEdit: !!env.ADMIN_KV && !fromEnv };
+  }
+  {
+    const fc = raw.FIREBASE_CONFIG ? String(raw.FIREBASE_CONFIG) : "";
+    const pid = (fc.match(/["']?projectId["']?\s*:\s*["']([^"']+)["']/) || [])[1];
+    secrets.FIREBASE_CONFIG = { set: !!fc, source: fc ? "dashboard" : null, hint: fc ? (pid ? "projectId: " + pid : "설정됨") : "", canEdit: false };
   }
   const days = [];
   if (env.ADMIN_KV) {
