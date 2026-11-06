@@ -341,7 +341,7 @@ kbd{font:500 11px var(--font);color:var(--mut2);background:#F1F3F8;border-radius
 .top>*:not(.ttlwrap):not(.grow):not(.stt){flex-shrink:0}
 .ttlbtn .tt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ttlbtn svg{flex:none}
-.stt{display:none;font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s}
+.stt{display:none;font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;opacity:0;transition:opacity .15s}
 .tbnew{display:none}
 .phead{align-items:flex-start;gap:12px;flex-wrap:nowrap}
 .phead .grow{min-width:0}
@@ -462,7 +462,7 @@ input[type=file]::file-selector-button:hover{background:#DCE6FF}
   .top .pill .pl{display:none}
   .ttlbtn{max-width:100%}
   .stt{display:block}
-  .top.st .stt{opacity:1;transform:none}
+  .top.st .stt{opacity:1}
   .tbnew{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s}
   .tbnew.show{opacity:1;pointer-events:auto}
   .acct{left:12px!important;right:12px!important;width:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}

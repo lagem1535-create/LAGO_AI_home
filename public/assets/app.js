@@ -155,10 +155,10 @@ it("sliders","설정",'data-go="prefs"','<span class="kb">Ctrl+,</span>')+it("ga
 function tempBar(){const c=curChat();const inTemp=c&&c.temp&&(route()==="chat"||route()==="code-chat");const n=S.chats.filter(x=>x.temp).length;const ttl=["창을 닫으면","1시간 뒤","24시간 뒤"][S.ttl||0];
 let left="";if(inTemp&&S.ttl){const ms=c.created+(S.ttl===1?36e5:864e5)-Date.now();left=` · 남은 시간 ${Math.max(0,Math.floor(ms/6e4))}분`;}
 return `<div class="tempbar"><span class="row" style="gap:6px">${ic("eyeoff",15)} <b>임시 대화</b></span><span class="tb-txt">기록 · 학습 · 사용자 지정에 남지 않아요 · ${ttl} 지워져요${left}</span><span class="grow"></span>${inTemp?`<button data-act="tempCopy">${ic("copy",13)}<span class="tb-l">전체 복사</span></button><button data-act="tempSave">${ic("check",13)}<span class="tb-l">일반 대화로 저장</span></button>`:""}<button data-act="tempEnd">${ic("x",13)}<span class="tb-l">끝내기</span></button></div>${S.tempAsk?`<div class="tempask" role="alertdialog" aria-label="임시 대화 끝내기"><div class="card" style="display:grid;gap:12px;max-width:380px;width:100%"><b style="font-size:16px">임시 대화를 끝낼까요?</b><span class="muted" style="font-size:13px">끝내면 이 창의 임시 대화 ${n}개가 바로 지워져요. 남기고 싶은 대화는 일반 대화로 저장하세요.</span><div style="display:grid;gap:8px"><button class="btn pri" data-act="tempEndYes">지우고 홈으로 가기</button>${inTemp?`<button class="btn" data-act="tempSaveEnd">이 대화는 저장하고 끝내기</button>`:""}<button class="btn" data-act="tempAskNo">계속 임시 대화하기</button></div></div></div>`:""}`;}
-function topbar(title,extra=""){const plan=S.user?S.user.plan||"Free":"Free";
+function topbar(title,extra=""){
 return `<header class="top"><button class="iconbtn menu-btn" data-act="drawer" aria-label="메뉴 열기">${ic("menu",22)}</button><span class="mwm">${WM(16)}</span>${S.area==="code"?`<span class="codebadge">${ic("code",14)} 코드</span>`:""}${title}${title?"":`<span class="stt" aria-hidden="true"></span>`}<span class="grow"></span>${extra}
 <button class="pill" data-act="new" title="새 대화 (Ctrl K)">${ic("pen",15)}<span class="pl">새 대화</span></button>
-${S.goccia?"":plan==="Max"?`<span class="maxtag big" title="Max 요금제 이용 중">${ic("crown",14)} MAX</span>`:`<button class="upbtn hide-m" data-go="plans"><svg class="spark" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z" fill="currentColor"/></svg>${plan==="Pro"?"Max로":"업그레이드"}</button>`}</header>`;}
+</header>`;}
 function shell(inner){const r=route();const tempOn=S.temp&&["home","chat","code","code-chat","agent"].includes(r);
 if(S.temp&&S.ttl){const lim=S.ttl===1?36e5:864e5;S.chats=S.chats.filter(c=>!c.temp||Date.now()-c.created<lim);}
 return `<div class="shell ${S.sideOff?"sideoff":""} ${S.area==="code"?"code":""} ${S.goccia?"goccia":""} ${S.drawer?"drawer":""}">${sidebar()}<div class="overlay" data-act="drawer"></div><div class="main ${tempOn?"temp":""}">${tempOn?tempBar():""}${inner}</div></div>`;}
@@ -433,7 +433,7 @@ const by=[["FACT",.46,"#2BA3B8"],["빠른 생각",.27,"#1B3E9E"],["THINK",.17,"#
 const days=[["금",38],["토",12],["일",5],["월",61],["화",44],["수",72],["오늘",pct]];
 const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?Math.round(n/1e3)+"K":n;
 return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:860px;display:grid;gap:16px">
-<div class="row" style="flex-wrap:wrap"><div class="grow"><h1>사용량</h1><p class="muted" style="margin:0">${plan} 요금제 · 하루 ${fmt(lim)} 토큰 · 예시 데이터</p></div><button class="btn sm" data-go="plans">요금제 보기</button></div>
+<div class="row" style="flex-wrap:wrap"><div class="grow"><h1>사용량</h1><p class="muted" style="margin:0">${plan} 요금제 · 하루 ${fmt(lim)} 토큰 · 예시 데이터</p></div></div>
 <div class="card" style="display:grid;gap:10px"><div class="row"><b style="font-size:15px">오늘</b><span class="grow"></span><span class="muted" style="font-size:12.5px">${hh}시간 ${mm}분 뒤 초기화 (0시, 한국 시간)</span></div>
 <div class="row" style="align-items:baseline;gap:6px"><span class="price" style="font-size:32px">${pct}%</span><span class="muted">${fmt(used)} / ${fmt(lim)} 토큰</span></div><div class="bar" style="height:10px"><i style="width:${pct}%"></i></div>
 ${pct>=80?`<div class="note">${ic("info",16)}<span>한도에 가까워요. 다 쓰면 내일 0시까지 쉬었다가 다시 쓸 수 있어요.</span></div>`:""}</div>
