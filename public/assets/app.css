@@ -343,6 +343,9 @@ kbd{font:500 11px var(--font);color:var(--mut2);background:#F1F3F8;border-radius
 .ttlbtn svg{flex:none}
 .stt{display:none;font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;opacity:0;transform:translateY(4px);transition:opacity .15s,transform .15s}
 .fab{display:none}
+.phead{align-items:flex-start;gap:12px;flex-wrap:nowrap}
+.phead .grow{min-width:0}
+.hbtn{flex:none;white-space:nowrap}
 .ttlbtn{min-width:0;border:0;background:none;display:inline-flex;align-items:center;gap:4px;font-weight:500;color:var(--ink2);padding:6px 8px;border-radius:8px;max-width:46vw;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .ttlbtn:hover{background:#EEF1F7}
 .ttlwrap .cmenu{left:0;right:auto}

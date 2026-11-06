@@ -258,7 +258,7 @@ setTimeout(async()=>{const a=(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||t
 
 /* ---------- projects ---------- */
 function vProjects(){return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:1080px">
-<div class="row" style="align-items:flex-start;flex-wrap:wrap;gap:12px"><div class="grow"><h1>프로젝트</h1><p class="muted" style="margin:0">대화와 자료를 주제별로 모아 두면, LAGO가 그 안의 내용을 참고해서 답해요.</p></div><button class="btn pri" id="npbtn" data-act="newproj">${ic("plus",16)} 새 프로젝트</button></div>
+<div class="row phead"><div class="grow"><h1>프로젝트</h1><p class="muted" style="margin:0">대화와 자료를 주제별로 모아 두면, LAGO가 그 안의 내용을 참고해서 답해요.</p></div><button class="btn pri hbtn" id="npbtn" data-act="newproj">${ic("plus",16)} 새 프로젝트</button></div>
 ${S.newProj?`<form class="card" id="projForm" style="margin-top:18px;display:grid;gap:10px;max-width:520px"><label class="f" for="pn">프로젝트 이름<input id="pn" placeholder="예: 독서 기록"></label><label class="f" for="pd">설명 (선택)<input id="pd" placeholder="무엇을 모아 둘까요?"></label><p class="err" id="perr"></p><div class="row"><button class="btn pri sm" type="submit">만들기</button><button class="btn sm" type="button" data-act="newproj">취소</button></div></form>`:""}
 <div class="grid3" style="margin-top:20px">${S.projects.map(p=>`<button class="card pcard" data-project="${p.id}"><span class="logo-dot" style="width:36px;height:36px;border-radius:10px;background:var(--mist);color:var(--blue)">${ic("folder",18)}</span><b style="font-size:16px">${esc(p.name)}</b><span class="muted" style="font-size:13px">${esc(p.desc||"설명 없음")}</span><span class="row muted" style="font-size:12px">${ic("msg",13)} 대화 ${p.n}개<span class="grow"></span>${esc(p.u)}</span></button>`).join("")}</div></div><button class="fab" id="fabnp" data-act="newproj" aria-label="새 프로젝트" tabindex="-1">${ic("plus",18)}<span>새 프로젝트</span></button></div>`);}
 function vProject(){const p=S.projects.find(x=>x.id===S.curProject)||S.projects[0];
@@ -276,7 +276,7 @@ function agentCard(a){const fav=S.favs.includes(a.id);return `<div class="card a
 function vAgents(){const mine=S.agentTab==="mine";let list=mine?S.myAgents:OFFICIAL;
 if(!mine&&S.agentCat!=="전체")list=S.agentCat==="즐겨찾기"?allAgents().filter(a=>S.favs.includes(a.id)):list.filter(a=>a.cat===S.agentCat);
 return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:1100px">
-<div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-start"><div class="grow"><h1>에이전트</h1><p class="muted" style="margin:0">자주 하는 일을 에이전트로 만들어 두면, 고르기만 해도 같은 방식으로 답해요.</p></div>${S.goccia?"":`<button class="btn pri" data-act="newagent">${ic("plus",16)} 에이전트 만들기</button>`}</div>
+<div class="row phead"><div class="grow"><h1>에이전트</h1><p class="muted" style="margin:0">자주 하는 일을 에이전트로 만들어 두면, 고르기만 해도 같은 방식으로 답해요.</p></div>${S.goccia?"":`<button class="btn pri hbtn" data-act="newagent">${ic("plus",16)} 새 에이전트</button>`}</div>
 <div class="tabs" role="tablist"><button role="tab" aria-selected="${!mine}" data-tab="lago">LAGO 에이전트</button>${S.goccia?"":`<button role="tab" aria-selected="${mine}" data-tab="mine">나만의 에이전트 <span class="muted">${S.myAgents.length}</span></button>`}</div>
 ${mine?"":`<div class="cats">${CATS.map(c=>`<button aria-pressed="${S.agentCat===c}" data-cat="${c}">${c}</button>`).join("")}</div>`}
 <div class="grid3">${mine?`<button class="card agent newagent" data-act="newagent">${ic("plus",22)} 새 에이전트 만들기<span class="muted" style="font-weight:400;font-size:12.5px">이름 · 지시문 · 시작 질문만 정하면 돼요</span></button>`:""}${list.map(agentCard).join("")}</div>
