@@ -443,7 +443,7 @@ const DEMO={email:"dani@lago.ai",name:"다니",plan:"Pro"};
 /* ---------- state ---------- */
 const S={user:null,area:"talk",mode:"Fonte",pinned:["p1"],study:false,timeReq:null,extra:0,ptab:"general",cmode:"Code Corrente",think:1,web:0,menu:false,drawer:false,chats:[],cur:null,projects:SEED_PROJECTS.map(p=>({...p})),curProject:null,temp:false,learn:true,learnImg:true,confirm:null,preview:false,todos:[{t:"장보기",d:true},{t:"LAGO 데이터셋 정리",d:false},{t:"운동 30분",d:false}],kid:{sent:false,email:""},myAgents:[],favs:[],agentTab:"lago",agentCat:"전체",curAgent:null,editAgent:null,acct:false,goccia:false,gview:null,verify:"card",pendingVerify:null};
 function loadUser(){const s=store.get("lago_session",null);if(!s)return;S.user=s;const d=store.get("lago_data_"+s.email,null);if(d){S.chats=d.chats||[];S.learn=d.learn!==false;S.learnImg=d.learnImg!==false;if(d.mode&&TALK_MODES.some(m=>m.id===d.mode))S.mode=d.mode;if(d.pinned)S.pinned=d.pinned;S.myAgents=d.myAgents||[];S.favs=d.favs||[];if(d.think!=null)S.think=d.think;if(d.web!=null)S.web=d.web;}}
-function save(){if(!S.user)return;store.set("lago_data_"+S.user.email,{myAgents:S.myAgents,favs:S.favs,pinned:S.pinned,chats:S.chats.filter(c=>!c.temp&&!c.kid),learn:S.learn,learnImg:S.learnImg,mode:S.mode,think:S.think,web:S.web});}
+function save(){if(!S.user)return;if(S.user.uid){fbSave();return;}store.set("lago_data_"+S.user.email,{myAgents:S.myAgents,favs:S.favs,pinned:S.pinned,chats:S.chats.filter(c=>!c.temp&&!c.kid),learn:S.learn,learnImg:S.learnImg,mode:S.mode,think:S.think,web:S.web});}
 
 const me=()=>S.goccia?{name:"지우",plan:"Goccia",email:"kid"}:S.user;
 const allAgents=()=>[...S.myAgents,...OFFICIAL];
@@ -609,7 +609,26 @@ if(/html|화면|ui|앱|페이지|할일|todo/i.test(q))return{html:`<span class=
 return{html:`<span class="status">${ic("brain",14)} 생각 과정 · 8초</span><p class="answer">pandas의 drop_duplicates로 중복을 지우고, 결과는 새 파일(…_dedup.csv)로 저장할게요. 원본 파일은 건드리지 않아요.</p><div class="codeblock"><header>python · dedup.py<button data-act="copy" data-text="def remove_duplicates(src): ...">${ic("copy",13)} 복사</button></header><pre>${code}</pre></div><div class="card" style="padding:12px 14px;display:grid;gap:10px;border-color:#BFDCCB"><div class="row" style="font-size:12px;color:var(--g);font-weight:600">${ic("term",15)} 명령 제안 <span class="grow"></span><span class="muted" style="font-weight:400">lago_app 폴더 안에서만 실행돼요</span></div><code style="background:#0F1F1A;color:#D7E3E8;padding:9px 12px;border-radius:8px;font:12px var(--mono);overflow-x:auto;white-space:nowrap">$ python -c "from dedup import remove_duplicates; remove_duplicates('data.csv')"</code><div class="row"><button class="btn sm pri g" data-act="run">${ic("check",14)} 승인하고 실행</button><button class="btn sm" data-act="skip">건너뛰기</button></div></div>`,plain:"dedup.py",meta:S.cmode+" 1.0"};}
 function todoApp(){return `<div class="todo"><h3>오늘 할 일</h3><form id="todoForm"><input type="text" id="todoIn" placeholder="할 일을 입력하세요" aria-label="할 일"><button class="addb" type="submit">+ 추가</button></form>${S.todos.map((t,i)=>`<label><input type="checkbox" data-todo="${i}" ${t.d?"checked":""}><span class="${t.d?"done":""}">${esc(t.t)}</span></label>`).join("")}<small style="color:#8A8AA0">남은 할 일 ${S.todos.filter(t=>!t.d).length}개</small></div>`;}
 /* ---------- live API (Cloudflare Worker: /api/*) ---------- */
-async function loadApi(){if(!/^https?:$/.test(location.protocol))return;try{const r=await fetch("/api/config",{cache:"no-store"});if(!r.ok)return;const c=await r.json();if(c&&c.wiki){S.api=c;if(S.user)render();}}catch(e){}}
+/* ---------- Firebase (Auth + Firestore) : 설정은 /api/config 의 FIREBASE_CONFIG 시크릿에서 받아요 ---------- */
+const FB_V="10.12.2",FB_CDN="https://cdnjs.cloudflare.com/ajax/libs/firebase/"+FB_V+"/";
+const loadScript=u=>new Promise((ok,no)=>{const e=document.createElement("script");e.src=u;e.onload=ok;e.onerror=no;document.head.appendChild(e);});
+async function initFirebase(cfg){try{
+await loadScript(FB_CDN+"firebase-app-compat.min.js");await Promise.all([loadScript(FB_CDN+"firebase-auth-compat.min.js"),loadScript(FB_CDN+"firebase-firestore-compat.min.js")]);
+const app=firebase.initializeApp(cfg);S.fb={auth:firebase.auth(),db:firebase.firestore()};
+S.fb.auth.languageCode="ko";
+S.fb.auth.onAuthStateChanged(async u=>{
+ if(!u){if(S.user&&S.user.uid){S.user=null;S.chats=[];S.cur=null;go("login");}render();return;}
+ let d={};try{const snap=await S.fb.db.doc("users/"+u.uid+"/data/main").get();if(snap.exists)d=snap.data();}catch(e){toast("저장된 데이터를 불러오지 못했어요 (Firestore 규칙을 확인해 주세요)");}
+ S.user={uid:u.uid,email:u.email,name:d.name||u.displayName||(u.email||"").split("@")[0],plan:d.plan||"Free"};
+ S.chats=d.chats||[];S.myAgents=d.myAgents||[];S.favs=d.favs||[];if(d.pinned)S.pinned=d.pinned;S.learn=d.learn!==false;S.learnImg=d.learnImg!==false;if(d.mode&&TALK_MODES.some(m=>m.id===d.mode))S.mode=d.mode;if(d.think!=null)S.think=d.think;
+ if(!snap_exists(d)&&!S.signingUp)fbSave(true);
+ const r=route();if(["login","join","verify","kid"].includes(r)||!r)go("home");else render();});
+}catch(e){S.fbErr=true;toast("Firebase를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.");}}
+const snap_exists=d=>d&&Object.keys(d).length>0;
+let fbT=null;
+function fbSave(now){if(!S.fb||!S.user||!S.user.uid)return;clearTimeout(fbT);const run=()=>{const data=JSON.parse(JSON.stringify({name:S.user.name,plan:S.user.plan||"Free",myAgents:S.myAgents,favs:S.favs,pinned:S.pinned,chats:S.chats.filter(c=>!c.temp&&!c.kid),learn:S.learn,learnImg:S.learnImg,mode:S.mode,think:S.think,updated:Date.now()}));S.fb.db.doc("users/"+S.user.uid+"/data/main").set(data).catch(()=>toast("저장하지 못했어요. 인터넷이나 Firestore 규칙을 확인해 주세요."));};now?run():fbT=setTimeout(run,800);}
+const fbMsg=e=>({"auth/invalid-credential":"이메일이나 비밀번호가 맞지 않아요.","auth/wrong-password":"비밀번호가 맞지 않아요.","auth/user-not-found":"가입된 이메일이 아니에요. 회원가입을 먼저 해 주세요.","auth/email-already-in-use":"이미 가입된 이메일이에요. 로그인해 주세요.","auth/weak-password":"비밀번호가 너무 약해요. 영문과 숫자를 섞어 8자 이상으로 해 주세요.","auth/too-many-requests":"시도가 너무 많아요. 잠시 뒤에 다시 해 주세요.","auth/popup-closed-by-user":"Google 창이 닫혔어요.","auth/cancelled-popup-request":"Google 창이 닫혔어요.","auth/unauthorized-domain":"이 주소가 Firebase 승인된 도메인에 없어요. Authentication → 설정 → 승인된 도메인에 추가해 주세요.","auth/network-request-failed":"인터넷 연결을 확인해 주세요.","auth/operation-not-allowed":"이 로그인 방법이 Firebase에서 꺼져 있어요.","auth/invalid-email":"이메일 주소를 확인해 주세요."}[e&&e.code]||"로그인하지 못했어요. ("+((e&&e.code)||"알 수 없음")+")");
+async function loadApi(){if(!/^https?:$/.test(location.protocol))return;try{const r=await fetch("/api/config",{cache:"no-store"});if(!r.ok)return;const c=await r.json();if(c&&c.wiki){S.api=c;if(c.firebase&&!c.firebase.error&&c.firebase.apiKey)initFirebase(c.firebase);if(S.user)render();}}catch(e){}}
 const srcCard=(n,title,host,url)=>`<a class="src" href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span class="n">${n}</span><span class="grow"><b style="font-weight:500">${esc(title)}</b><br><span class="muted" style="font-size:11.5px">${esc(host)}</span></span>${ic("ext",14)}</a>`;
 async function liveAnswer(q){try{
 if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const m=q.match(/(\d{1,2})\s*월/),y=q.match(/(20\d{2})\s*년/);const now=new Date();const yy=y?y[1]:now.getFullYear(),mm=m?m[1]:now.getMonth()+1;
@@ -720,7 +739,7 @@ let body="";
 if(t==="general")body=row("이름",esc(S.user.name),`<button class="btn sm" data-act="rename">바꾸기</button>`)+(S.renaming?`<form id="renameForm" class="row" style="padding:0 0 12px"><input id="rn" value="${esc(S.user.name)}" aria-label="새 이름"><button class="btn sm pri">저장</button></form>`:"")
 +row("새 대화 기본 모델","",`<select id="sMode" aria-label="기본 모델">${TALK_MODES.map(m=>`<option value="${m.id}" ${S.mode===m.id?"selected":""}>${m.lab} · ${m.id}</option>`).join("")}</select>`)
 +row("생각 강도","THINK · CODE에서 얼마나 깊게 생각할지",`<select id="sThink" aria-label="생각 강도">${["낮게","보통","깊게"].map((x,i)=>`<option value="${i}" ${S.think===i?"selected":""}>${x}</option>`).join("")}</select>`)
-+row("언어","","<span class=\"muted\">한국어</span>")+row("서버 연결",S.api?"위키백과 · 공공데이터 "+(S.api.publicData?"연결됨":"키 없음")+" · Firebase "+(S.api.firebase&&!S.api.firebase.error?"연결됨":"설정 없음"):"미리보기 (예시 답변)","");
++row("언어","","<span class=\"muted\">한국어</span>")+row("서버 연결",S.api?"위키백과 · 공공데이터 "+(S.api.publicData?"연결됨":"키 없음")+" · Firebase "+(S.fb?"연결됨 · 로그인 "+esc(S.user.email):"설정 없음"):"미리보기 (예시 답변)","");
 if(t==="account")body=row("이메일",esc(S.user.email),'<span style="color:var(--g);font-size:12.5px;font-weight:600">인증됨</span>')+row("로그아웃","",`<button class="btn sm" data-act="logout">${ic("logout",14)} 로그아웃</button>`)+row("탈퇴","계정과 대화가 모두 지워져요",`<button class="btn sm danger" data-act="ask-leave">탈퇴하기</button>`)+(conf==="leave"?`<div class="confirm">탈퇴하면 계정과 대화가 모두 지워져요. 유료 요금제는 먼저 해지돼요.<div class="row"><button class="btn sm danger" data-act="leave">탈퇴하기</button><button class="btn sm" data-act="cancel">취소</button></div></div>`:"");
 if(t==="plan")body=row(esc(S.user.plan||"Free")+" 요금제","",`<button class="btn sm" data-go="plans">요금제 바꾸기</button>`)+row("오늘 사용량",usagePct()+"% · 매일 0시(한국 시간)에 초기화",`<button class="btn sm pri" data-go="usage">자세히 보기</button>`);
 if(t==="data")body=row("LAGO 개선에 내 대화 사용","끄면 그 뒤 대화는 학습에 들어가지 않아요.",sw("learn",S.learn))+row("이미지도 사용","첨부한 이미지와 화면 캡처",sw("learnImg",S.learnImg))+row("내 데이터 전부 지우기","대화 · 프로젝트 · 이미지를 지워요. 되돌릴 수 없어요.",`<button class="btn sm danger" data-act="ask-wipe">지우기</button>`)+(conf==="wipe"?`<div class="confirm">정말 모두 지울까요?<div class="row"><button class="btn sm danger" data-act="wipe">${ic("trash",14)} 모두 지우기</button><button class="btn sm" data-act="cancel">취소</button></div></div>`:"");
@@ -799,13 +818,13 @@ if(d.agcol){readDraft();S.draft.c=d.agcol;render();return;}
 if(d.mode){if(S.area==="code")S.cmode=d.mode;else S.mode=d.mode;S.menu=false;save();render();return;}
 if(d.think){S.think=+d.think;save();render();return;}
 if(d.web){S.web=+d.web;save();render();return;}
-if(d.plan){S.user.plan=d.plan;store.set("lago_session",S.user);toast(d.plan==="Free"?"Free로 바꿨어요 (미리보기)":"결제는 아직 연결 전이에요. 미리보기에서는 "+d.plan+"로 바뀌어요.");render();return;}
+if(d.plan){S.user.plan=d.plan;if(S.user.uid)fbSave(true);else store.set("lago_session",S.user);toast(d.plan==="Free"?"Free로 바꿨어요 (미리보기)":"결제는 아직 연결 전이에요. 미리보기에서는 "+d.plan+"로 바뀌어요.");render();return;}
 if(d.sw){const k=d.sw;S[k]=k==="kStudy"?S[k]!==true:!(S[k]!==false);if(k==="learn"||k==="learnImg"){toast(S[k]?"켰어요":"껐어요. 이제부터의 대화는 학습에 쓰지 않아요.");}save();render();return;}
 if(d.todo!=null&&t.tagName==="INPUT")return;
 switch(d.act){
 case"replay":brandStage&&brandStage.play();break;
 case"demo":S.user={...DEMO};store.set("lago_session",S.user);loadUser();toast("예시 계정으로 들어왔어요");go("home");break;
-case"google":toast("Google 로그인은 실제 서비스에서 연결돼요. 지금은 예시 계정으로 들어갈게요.");S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");break;
+case"google":if(S.fb){try{await S.fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){const m=$("#lerr")||$("#jerr");if(m)m.textContent=fbMsg(e);else toast(fbMsg(e));}break;}toast("Google 로그인은 실제 서비스에서 연결돼요. 지금은 예시 계정으로 들어갈게요.");S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");break;
 case"forgot":{const em=($("#le")||{}).value||"";toast(em?esc(em)+"로 재설정 메일을 보냈어요 (미리보기)":"이메일을 먼저 입력해 주세요");break;}
 case"verified":{const u=store.get("lago_users",{})[S.pendingVerify];if(u){S.user={email:S.pendingVerify,name:u.name,plan:"Free"};store.set("lago_session",S.user);loadUser();toast("인증됐어요. 환영해요!");go("home");}else go("login");break;}
 case"resend":toast("인증 메일을 다시 보냈어요 (1분에 한 번)");break;
@@ -860,7 +879,7 @@ case"newproj":S.newProj=!S.newProj;render();if(S.newProj)setTimeout(()=>$("#pn")
 case"editins":S.editIns=!S.editIns;render();break;
 case"saveins":{const p=S.projects.find(x=>x.id===S.curProject);if(p)p.ins=$("#insIn").value.trim();S.editIns=false;render();toast("지침을 저장했어요");break;}
 case"rename":S.renaming=!S.renaming;render();break;
-case"logout":store.del("lago_session");S.user=null;S.chats=[];S.cur=null;toast("로그아웃했어요");go("login");break;
+case"logout":if(S.fb&&S.user&&S.user.uid){S.fb.auth.signOut();S.acct=false;break;}store.del("lago_session");S.user=null;S.chats=[];S.cur=null;toast("로그아웃했어요");go("login");break;
 case"ask-wipe":S.confirm="wipe";render();break;
 case"ask-leave":S.confirm="leave";render();break;
 case"cancel":S.confirm=null;render();break;
@@ -887,6 +906,7 @@ if(f.id==="todoForm"){const v=$("#todoIn").value.trim();if(v){S.todos.push({t:v,
 if(f.id==="loginForm"){const em=$("#le").value.trim().toLowerCase(),pw=$("#lp").value,err=$("#lerr");
  if(!/^\S+@\S+\.\S+$/.test(em)){err.textContent="이메일 주소를 확인해 주세요.";$("#le").focus();return;}
  if(!pw){err.textContent="비밀번호를 입력해 주세요.";$("#lp").focus();return;}
+ if(S.fb&&em!==DEMO.email){err.textContent="";const b=f.querySelector("button.pri,button[type=submit]");if(b)b.disabled=true;try{await S.fb.auth.signInWithEmailAndPassword(em,pw);toast("다시 오신 걸 환영해요");}catch(e){err.textContent=fbMsg(e);}if(b)b.disabled=false;return;}
  if(em===DEMO.email){S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");return;}
  const u=store.get("lago_users",{})[em];if(!u){err.textContent="가입된 이메일이 아니에요. 회원가입을 먼저 해 주세요.";return;}
  if(u.hash!==await hash(pw)){err.textContent="비밀번호가 맞지 않아요.";$("#lp").focus();return;}
@@ -899,6 +919,7 @@ if(f.id==="joinForm"){const n=$("#jn").value.trim(),em=$("#je").value.trim().toL
  const by=+$("#jy").value,bm=+$("#jm").value,bd=+$("#jd").value,now=new Date();let age=now.getFullYear()-by;if(now.getMonth()+1<bm||(now.getMonth()+1===bm&&now.getDate()<bd))age--;
  if(age<14){S.kid={sent:false,email:""};go("kid");return;}
  if(!$("#jt").checked){err.textContent="이용약관 · 개인정보 처리방침에 동의해 주세요.";return;}
+ if(S.fb){err.textContent="";const b=f.querySelector("button.pri,button[type=submit]");if(b)b.disabled=true;S.signingUp=true;try{const cr=await S.fb.auth.createUserWithEmailAndPassword(em,pw);await cr.user.updateProfile({displayName:n});S.pendingName=n;await S.fb.db.doc("users/"+cr.user.uid+"/data/main").set({name:n,plan:"Free",chats:[],learn:$("#jl").checked,learnImg:$("#jl").checked,age14:new Date().toISOString().slice(0,10),created:Date.now()});try{await cr.user.sendEmailVerification();}catch(e){}if(S.user)S.user.name=n;render();toast(n+"님, 가입했어요. 확인 메일도 보냈어요");}catch(e){err.textContent=fbMsg(e);}S.signingUp=false;if(b)b.disabled=false;return;}
  const users=store.get("lago_users",{});if(users[em]||em===DEMO.email){err.textContent="이미 가입된 이메일이에요. 로그인해 주세요.";return;}
  users[em]={name:n,hash:await hash(pw),verified:false,plan:"Free",learn:$("#jl").checked,age14:new Date().toISOString().slice(0,10)};store.set("lago_users",users);
  store.set("lago_data_"+em,{chats:[],learn:$("#jl").checked,learnImg:$("#jl").checked});
@@ -909,7 +930,7 @@ if(f.id==="agentForm"){readDraft();const d=S.draft;if(!d.name){$("#aerr").textCo
  if(S.editAgent){const i=S.myAgents.findIndex(a=>a.id===S.editAgent);S.myAgents[i]={...S.myAgents[i],...d};S.curAgent=S.editAgent;}else{const a={...d,id:"m"+Date.now(),mine:true,cat:"내 에이전트"};S.myAgents.unshift(a);S.curAgent=a.id;}
  save();toast(S.editAgent?"에이전트를 저장했어요":"에이전트를 만들었어요");S.editAgent=null;go("agent");return;}
 if(f.id==="projForm"){const n=$("#pn").value.trim();if(!n){$("#perr").textContent="프로젝트 이름을 입력해 주세요.";return;}S.projects.unshift({id:"p"+Date.now(),name:n,desc:$("#pd").value.trim(),n:0,u:"방금",ins:"",files:[]});S.newProj=false;render();toast("프로젝트를 만들었어요");return;}
-if(f.id==="renameForm"){const v=$("#rn").value.trim();if(v){S.user.name=v;store.set("lago_session",S.user);const us=store.get("lago_users",{});if(us[S.user.email]){us[S.user.email].name=v;store.set("lago_users",us);}}S.renaming=false;render();toast("이름을 바꿨어요");}});
+if(f.id==="renameForm"){const v=$("#rn").value.trim();if(v){S.user.name=v;if(S.user.uid)fbSave(true);else store.set("lago_session",S.user);const us=store.get("lago_users",{});if(us[S.user.email]){us[S.user.email].name=v;store.set("lago_users",us);}}S.renaming=false;render();toast("이름을 바꿨어요");}});
 document.addEventListener("click",e=>{let ch=false;if(S.menu&&!e.target.closest(".composer")){S.menu=false;ch=true;}if(S.acct&&!e.target.closest(".acct,[data-act=acct]")){S.acct=false;ch=true;}if(S.cmenu&&!e.target.closest(".cmenu,[data-cmenu]")){S.cmenu=null;ch=true;}if(ch)render();},true);
 
 /* ---------- brand 3D mark (login) ---------- */

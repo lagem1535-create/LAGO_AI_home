@@ -36,3 +36,20 @@ wrangler.jsonc      Worker 설정 (이름: lago-ai-home)
 
 모델: Fonte 1.0 (FACT) · Torrente 1.0 (빠른 생각) · Mare 1.0 (THINK) · Code Spruzzo 1.0 · Code Corrente 1.0
 일정: Beta 12/20 · 공개 12/31
+
+## Firebase (로그인 · 저장)
+
+- 로그인: Firebase Authentication — 이메일/비밀번호, Google
+- 저장: Cloud Firestore — `users/{uid}/data/main` 문서 하나에 대화·프로젝트·에이전트·설정을 저장
+- Firestore 규칙(자기 데이터만):
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+- `FIREBASE_CONFIG` 시크릿이 없으면 예전처럼 브라우저 저장소(예시 모드)로 동작해요.
