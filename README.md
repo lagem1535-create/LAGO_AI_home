@@ -4,7 +4,6 @@ LAGO AI 앱 화면과, 그 화면을 내보내는 Cloudflare Worker예요.
 
 ```
 public/index.html   앱 전체 (로그인 · 대화 · 코드 · 프로젝트 · 에이전트 · 요금제 · 사용량 · 설정 · 보호자 · 아이 계정)
-public/brand.html   로그인 화면용 3D 브랜드 애니메이션
 src/worker.js       /api/* 처리 (위키백과 · 공공데이터 · Firebase 설정)
 wrangler.jsonc      Worker 설정 (이름: lago-ai-home)
 ```
