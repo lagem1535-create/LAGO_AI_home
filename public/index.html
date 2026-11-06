@@ -1,5 +1,10 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>html,body{margin:0}</style>
 <title>LAGO 앱 미리보기</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap">
 <style>
@@ -396,6 +401,8 @@ kbd{font:500 11px var(--font);color:var(--mut2);background:#F1F3F8;border-radius
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
+</head>
+<body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="gL" x1="0" x2="1"><stop offset="0" stop-color="#0B2468"/><stop offset="1" stop-color="#7AA2FF"/></linearGradient><linearGradient id="gR" x1="0" x2="1"><stop offset="0" stop-color="#7AA2FF"/><stop offset="1" stop-color="#0B2468"/></linearGradient></defs></svg>
 <div id="app"></div>
 <div id="toast" class="toast" hidden role="status"></div>
@@ -601,11 +608,25 @@ function codeAnswer(q){const code=`<span class="kw">import</span> pandas <span c
 if(/html|화면|ui|앱|페이지|할일|todo/i.test(q))return{html:`<span class="status">${ic("brain",14)} 생각 과정 · 6초</span><p class="answer">index.html 하나로 할 일 앱 화면을 만들었어요. 할 일을 추가하고, 체크하면 줄이 그어져요. 오른쪽 미리보기에서 바로 눌러 볼 수 있어요.</p><div class="filecard"><span class="logo-dot" style="width:32px;height:32px;border-radius:8px;background:var(--gt);color:var(--g)">${ic("file",16)}</span><span class="grow"><b>index.html</b><br><span class="muted" style="font-size:11.5px">HTML · 84줄</span></span><button class="chip" data-act="preview">${ic("eye",13)} 미리보기</button></div>`,plain:"index.html",meta:S.cmode+" 1.0",preview:true};
 return{html:`<span class="status">${ic("brain",14)} 생각 과정 · 8초</span><p class="answer">pandas의 drop_duplicates로 중복을 지우고, 결과는 새 파일(…_dedup.csv)로 저장할게요. 원본 파일은 건드리지 않아요.</p><div class="codeblock"><header>python · dedup.py<button data-act="copy" data-text="def remove_duplicates(src): ...">${ic("copy",13)} 복사</button></header><pre>${code}</pre></div><div class="card" style="padding:12px 14px;display:grid;gap:10px;border-color:#BFDCCB"><div class="row" style="font-size:12px;color:var(--g);font-weight:600">${ic("term",15)} 명령 제안 <span class="grow"></span><span class="muted" style="font-weight:400">lago_app 폴더 안에서만 실행돼요</span></div><code style="background:#0F1F1A;color:#D7E3E8;padding:9px 12px;border-radius:8px;font:12px var(--mono);overflow-x:auto;white-space:nowrap">$ python -c "from dedup import remove_duplicates; remove_duplicates('data.csv')"</code><div class="row"><button class="btn sm pri g" data-act="run">${ic("check",14)} 승인하고 실행</button><button class="btn sm" data-act="skip">건너뛰기</button></div></div>`,plain:"dedup.py",meta:S.cmode+" 1.0"};}
 function todoApp(){return `<div class="todo"><h3>오늘 할 일</h3><form id="todoForm"><input type="text" id="todoIn" placeholder="할 일을 입력하세요" aria-label="할 일"><button class="addb" type="submit">+ 추가</button></form>${S.todos.map((t,i)=>`<label><input type="checkbox" data-todo="${i}" ${t.d?"checked":""}><span class="${t.d?"done":""}">${esc(t.t)}</span></label>`).join("")}<small style="color:#8A8AA0">남은 할 일 ${S.todos.filter(t=>!t.d).length}개</small></div>`;}
+/* ---------- live API (Cloudflare Worker: /api/*) ---------- */
+async function loadApi(){if(!/^https?:$/.test(location.protocol))return;try{const r=await fetch("/api/config",{cache:"no-store"});if(!r.ok)return;const c=await r.json();if(c&&c.wiki){S.api=c;if(S.user)render();}}catch(e){}}
+const srcCard=(n,title,host,url)=>`<a class="src" href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span class="n">${n}</span><span class="grow"><b style="font-weight:500">${esc(title)}</b><br><span class="muted" style="font-size:11.5px">${esc(host)}</span></span>${ic("ext",14)}</a>`;
+async function liveAnswer(q){try{
+if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const m=q.match(/(\d{1,2})\s*월/),y=q.match(/(20\d{2})\s*년/);const now=new Date();const yy=y?y[1]:now.getFullYear(),mm=m?m[1]:now.getMonth()+1;
+const r=await fetch(`/api/holidays?year=${yy}&month=${mm}`);const d=await r.json();if(!r.ok)throw 0;
+const list=d.items.length?`<ul style="margin:6px 0 0;padding-left:20px">${d.items.map(i=>`<li>${i.date.slice(4,6)*1}월 ${i.date.slice(6)*1}일 · ${esc(i.name)}</li>`).join("")}</ul>`:"<br>이 달에는 공휴일이 없어요.";
+return{html:`<span class="status">${ic("globe",14)} 공공데이터 1개 찾음</span><p class="answer">${yy}년 ${mm}월 공휴일이에요 <span class="cite">[1]</span>.${list}</p><div class="srcs">${srcCard(1,"한국천문연구원 특일 정보","공공데이터포털 · data.go.kr","https://www.data.go.kr")}</div>`,plain:`${yy}년 ${mm}월 공휴일 ${d.items.length}개`,meta:modeOf(S.mode).lab+" · 공공데이터"};}
+const kw=q.replace(/[?？!.]/g," ").replace(/(은|는|이|가|을|를|에 대해|에대해)?\s*(누가 만들었어|누가 만들었나요|뭐야|무엇인가요|뭔가요|알려 ?줘|설명해 ?줘|쉽게|자세히)/g," ").replace(/\s+/g," ").trim()||q;
+const r=await fetch("/api/wiki?q="+encodeURIComponent(kw));const d=await r.json();if(!r.ok||!d.found)return null;
+const top=d.results[0];const txt=(top.extract||"").split(/(?<=[.다요])\s+/).slice(0,S.mode==="Fonte"?4:2).join(" ");
+return{html:`<span class="status">${ic("globe",14)} 위키백과 ${d.results.length}개 찾음</span><p class="answer">${esc(txt)} <span class="cite">[1]</span></p><div class="srcs">${d.results.map((x,i)=>srcCard(i+1,x.title,"위키백과 · ko.wikipedia.org",x.url)).join("")}</div>`,plain:txt,meta:modeOf(S.mode).lab+" · 위키백과"};
+}catch(e){return null;}}
 function send(text){text=text.trim();if(!text)return;const code=S.area==="code";
 let c=(route()==="chat"||route()==="code-chat")?curChat():null;
 if(!c){c={id:"c"+Date.now(),area:S.area,title:text.slice(0,24),msgs:[],temp:S.temp,created:Date.now(),kid:S.goccia,agent:route()==="agent"?S.curAgent:null};S.chats.unshift(c);S.cur=c.id;}
 c.msgs.push({role:"user",text});const am={id:"m"+Date.now(),role:"assistant",loading:true};c.msgs.push(am);S.menu=false;save();
-go(code?"code-chat":"chat");setTimeout(()=>{const a=code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},900);}
+go(code?"code-chat":"chat");const useLive=!code&&S.api&&!c.agent&&!(S.goccia&&(S.study||S.kStudy===true||/죽고싶|자해|괴롭힘|때려|학대|무서워/.test(text.replace(/\s/g,""))));
+setTimeout(async()=>{const a=(useLive&&await liveAnswer(text))||(code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},900);}
 
 /* ---------- projects ---------- */
 function vProjects(){return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:1080px">
@@ -699,7 +720,7 @@ let body="";
 if(t==="general")body=row("이름",esc(S.user.name),`<button class="btn sm" data-act="rename">바꾸기</button>`)+(S.renaming?`<form id="renameForm" class="row" style="padding:0 0 12px"><input id="rn" value="${esc(S.user.name)}" aria-label="새 이름"><button class="btn sm pri">저장</button></form>`:"")
 +row("새 대화 기본 모델","",`<select id="sMode" aria-label="기본 모델">${TALK_MODES.map(m=>`<option value="${m.id}" ${S.mode===m.id?"selected":""}>${m.lab} · ${m.id}</option>`).join("")}</select>`)
 +row("생각 강도","THINK · CODE에서 얼마나 깊게 생각할지",`<select id="sThink" aria-label="생각 강도">${["낮게","보통","깊게"].map((x,i)=>`<option value="${i}" ${S.think===i?"selected":""}>${x}</option>`).join("")}</select>`)
-+row("언어","","<span class=\"muted\">한국어</span>");
++row("언어","","<span class=\"muted\">한국어</span>")+row("서버 연결",S.api?"위키백과 · 공공데이터 "+(S.api.publicData?"연결됨":"키 없음")+" · Firebase "+(S.api.firebase&&!S.api.firebase.error?"연결됨":"설정 없음"):"미리보기 (예시 답변)","");
 if(t==="account")body=row("이메일",esc(S.user.email),'<span style="color:var(--g);font-size:12.5px;font-weight:600">인증됨</span>')+row("로그아웃","",`<button class="btn sm" data-act="logout">${ic("logout",14)} 로그아웃</button>`)+row("탈퇴","계정과 대화가 모두 지워져요",`<button class="btn sm danger" data-act="ask-leave">탈퇴하기</button>`)+(conf==="leave"?`<div class="confirm">탈퇴하면 계정과 대화가 모두 지워져요. 유료 요금제는 먼저 해지돼요.<div class="row"><button class="btn sm danger" data-act="leave">탈퇴하기</button><button class="btn sm" data-act="cancel">취소</button></div></div>`:"");
 if(t==="plan")body=row(esc(S.user.plan||"Free")+" 요금제","",`<button class="btn sm" data-go="plans">요금제 바꾸기</button>`)+row("오늘 사용량",usagePct()+"% · 매일 0시(한국 시간)에 초기화",`<button class="btn sm pri" data-go="usage">자세히 보기</button>`);
 if(t==="data")body=row("LAGO 개선에 내 대화 사용","끄면 그 뒤 대화는 학습에 들어가지 않아요.",sw("learn",S.learn))+row("이미지도 사용","첨부한 이미지와 화면 캡처",sw("learnImg",S.learnImg))+row("내 데이터 전부 지우기","대화 · 프로젝트 · 이미지를 지워요. 되돌릴 수 없어요.",`<button class="btn sm danger" data-act="ask-wipe">지우기</button>`)+(conf==="wipe"?`<div class="confirm">정말 모두 지울까요?<div class="row"><button class="btn sm danger" data-act="wipe">${ic("trash",14)} 모두 지우기</button><button class="btn sm" data-act="cancel">취소</button></div></div>`:"");
@@ -907,6 +928,9 @@ function frame(now){if(!document.body.contains(canvas)){cancelAnimationFrame(raf
 const api={play(){size();cancelAnimationFrame(raf);t0=performance.now();raf=requestAnimationFrame(frame);},stop(){cancelAnimationFrame(raf);}};addEventListener("resize",size);brandStage=api;api.play();}
 
 /* ---------- boot ---------- */
-loadUser();render();
+loadUser();render();loadApi();
 })();
 </script>
+
+</body>
+</html>
