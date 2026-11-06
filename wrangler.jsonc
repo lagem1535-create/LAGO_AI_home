@@ -6,9 +6,11 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "html_handling": "drop-trailing-slash"
   },
-  "kv_namespaces": [{ "binding": "ADMIN_KV", "id": "24ed049d44f74a3897fbc3429d8686f9" }]
+  "kv_namespaces": [{ "binding": "ADMIN_KV", "id": "24ed049d44f74a3897fbc3429d8686f9" }],
+  "triggers": { "crons": ["*/10 * * * *"] }
   // 시크릿은 여기 적지 마세요. 대시보드(설정 → 변수 및 비밀) 또는
   //   npx wrangler secret put FIREBASE_CONFIG
   //   npx wrangler secret put DATA_GO_KR_KEY

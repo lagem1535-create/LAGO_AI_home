@@ -66,3 +66,32 @@ service cloud.firestore {
 - `FIREBASE_CONFIG`는 로그인 확인에 쓰여서 대시보드에서만 넣어요.
 - 사용량(접속, 위키, 공휴일, 아이 가입 요청, 알림, 메일 성공/실패)을 하루 단위로 세어 최근 14일을 보여줘요. 60일 지나면 지워져요. 개인정보(가입자·대화)는 세지 않아요.
 - KV 숫자는 동시에 들어오면 조금 틀릴 수 있어서 대략적인 값이에요.
+
+
+## 주소와 폴더 구조
+
+```
+public/
+  index.html            /            (홈)
+  chat/index.html       /chat        (대화) · /chat/<대화번호> 는 같은 화면이 열려요
+  admin/index.html      /admin       (관리자: 키·사용량)
+  admin/user/index.html /admin/user  (유저 관리)
+  assets/app.css        화면 모양
+  assets/app.js         앱 본체 (대화, 설정, 로그인 …)
+  assets/admin.js       관리자 화면 (/admin, /admin/user)
+src/worker.js           서버 (/api/*)
+scripts/inline.py       화면을 한 파일로 합쳐요 (미리보기용, # 주소 방식)
+```
+
+- 그 밖의 주소(`/usage`, `/plans`, `/prefs` …)는 `index.html`이 열리고 앱이 주소를 보고 화면을 골라요. 로그인하지 않고 `/chat/abc` 같은 주소로 들어오면 로그인 뒤에 그 주소로 돌아가요.
+- 폴더의 `index.html`은 모두 같은 내용이에요(주소를 예쁘게 만들기 위한 것). 고치려면 네 파일을 같이 고쳐요.
+
+## 유저 관리 (`/admin/user`)
+
+- 필요: 시크릿 `FIREBASE_SERVICE_ACCOUNT` (Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성 → JSON 전체). 관리자 화면 → 키와 설정에서 넣거나 Cloudflare 대시보드 시크릿으로 넣어요.
+- 기능: 유저 목록·검색, **영구 추방**, **시간 정지**(N시간), 정지 풀기, 로그아웃시키기, 요금제 바꾸기(Free/Pro/Max), 하루 토큰 한도 바꾸기.
+- 정지는 Firebase 계정을 비활성화해서 로그인 자체를 막고, 시간 정지는 10분마다 도는 크론(`wrangler.jsonc`의 `triggers.crons`)이 끝난 계정을 다시 열어요.
+- 정지·요금제·한도는 Firestore의 `mod/{uid}` 문서에 저장돼요. 이 문서는 서비스 계정만 쓸 수 있어서 유저가 스스로 바꿀 수 없어요. 앱은 열릴 때와 5분마다 `GET /api/me`로 이 값을 받아 와요.
+- 대화 내용은 읽지 않아요. 목록에는 이메일·이름·요금제·접속 기록만 나와요.
+- 관리자는 `ADMIN_EMAIL`(기본 `lagem1535@gmail.com`)이에요. 구글 로그인이든 이메일·비밀번호 로그인이든 **이메일 인증이 끝난** 계정만 인정해요.
+- 한계: 지금 AI 답은 미리보기라 서버에서 사용량을 세지 않아요. 한도는 화면에 반영되고, 실제 AI 서버를 붙일 때 `mod/{uid}`를 서버에서 확인해야 해요.
