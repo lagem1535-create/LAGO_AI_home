@@ -16,6 +16,8 @@ wrangler.jsonc      Worker 설정 (이름: lago-ai-home)
 |---|---|
 | `FIREBASE_CONFIG` | Firebase 콘솔 → 프로젝트 설정 → 내 앱(웹)의 설정을 **JSON 한 줄**로. 예: `{"apiKey":"AIza...","authDomain":"x.firebaseapp.com","projectId":"x","appId":"1:..."}` |
 | `DATA_GO_KR_KEY` | data.go.kr 마이페이지 → 일반 인증키 **(Decoding)** |
+| `RESEND_API_KEY` | (선택) resend.com API 키. 아이의 시간 요청을 보호자 이메일로 보낼 때 써요 |
+| `MAIL_FROM` | (선택) 보내는 사람. 비우면 `LAGO <onboarding@resend.dev>` (이 주소는 Resend 가입 이메일로만 보낼 수 있어요) |
 
 넣는 방법 (둘 중 하나):
 - 대시보드: Workers & Pages → `lago-ai-home` → 설정 → 변수 및 비밀 → 추가 → 유형 **비밀(Secret)**
@@ -29,6 +31,7 @@ wrangler.jsonc      Worker 설정 (이름: lago-ai-home)
 |---|---|
 | `GET /api/config` | Firebase 웹 설정과 연결 상태. (Firebase 웹 설정은 원래 공개되는 값이에요. 보안은 Firebase 보안 규칙으로 지켜요.) |
 | `GET /api/wiki?q=훈민정음` | 한국어 위키백과에서 찾아 요약 2개 (키 필요 없음) |
+| `POST /api/notify` | 아이의 시간 요청을 **로그인한 본인 이메일(구글 이메일)**로 보내요. Firebase 로그인 토큰을 확인하고, 토큰의 이메일에게만 보내서 스팸 통로로 쓸 수 없어요. 이메일 인증이 끝난 계정만 받아요. |
 | `GET /api/holidays?year=2026&month=12` | 공공데이터 예시 — 한국천문연구원 특일 정보(공휴일). data.go.kr에서 이 API를 **활용신청**해야 해요. 키는 Worker 안에서만 써요. |
 
 앱에서는 대화(FACT · 빠른 생각 · THINK)에 질문하면 위키백과에서 찾아 출처 카드와 함께 답하고, "12월 공휴일 알려 줘"처럼 물으면 공공데이터를 불러와요. 서버 연결 상태는 설정 → 일반 → 서버 연결에서 볼 수 있어요.
