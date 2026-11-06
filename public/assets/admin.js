@@ -14,7 +14,7 @@ const fmtN=n=>n>=1e6?(n/1e6).toFixed(n%1e6?1:0)+"M":n>=1e3?Math.round(n/1e3)+"K"
 /* ---------- /admin : 개요 · 키 ---------- */
 async function loadAdmin(){if(!isAdmin()||S.admin&&S.admin.loading)return;S.admin=Object.assign(S.admin||{},{loading:true,err:""});try{const j=await admFetch("/api/admin/status");S.admin={status:j,loading:false,err:"",at:Date.now()};}catch(e){S.admin={loading:false,err:e.message,needVerify:e.needVerify,at:Date.now()};}if(route()==="admin")render();}
 const ADM_SECRETS=[["RESEND_API_KEY","Resend 키","보호자·아이 메일 보내기에 써요. re_ 로 시작해요.","password","re_..."],["MAIL_FROM","보내는 사람","예: LAGO &lt;noreply@내도메인.com&gt;. 도메인을 Resend에서 인증해야 아무에게나 보낼 수 있어요. 비워 두면 기본 주소를 써요.","text","LAGO <noreply@example.com>"],["DATA_GO_KR_KEY","공공데이터 키","공공데이터포털(data.go.kr) 일반 인증키(Decoding)예요. 공휴일 답에 써요.","password","인증키"],["FIREBASE_SERVICE_ACCOUNT","Firebase 서비스 계정","유저 관리(목록·정지·요금제)에 써요. Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → ‘새 비공개 키 생성’으로 받은 JSON 파일 내용을 통째로 붙여넣어요. 이 키는 힘이 세요. 가능하면 Cloudflare 대시보드 시크릿으로 넣는 걸 권해요.","area","{ \"type\": \"service_account\", ... }"]];
-const ADM_STATS=[["visits","접속"],["wiki","위키 검색"],["holidays","공휴일 조회"],["kidConsent","아이 가입 요청"],["notify","시간 요청 알림"],["mailSent","메일 성공"],["mailFail","메일 실패"]];
+const ADM_STATS=[["visits","접속"],["wiki","위키 검색"],["holidays","공휴일 조회"],["kidConsent","아이 가입 요청"],["notify","시간 요청 알림"],["taskRun","예약 작업 실행"],["mailSent","메일 성공"],["mailFail","메일 실패"]];
 function vAdmin(){
 if(!isAdmin())return admDeny();
 if(!S.admin||Date.now()-(S.admin.at||0)>60000&&!S.admin.loading)setTimeout(loadAdmin,0);

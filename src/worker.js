@@ -269,7 +269,7 @@ async function listUsers(env) {
       provider: (u.providerUserInfo || []).map((x) => x.providerId.replace(".com", "")).join(", "),
       created: Number(u.createdAt) || 0, lastLogin: Number(u.lastLoginAt) || 0,
       disabled: !!u.disabled, bannedUntil: m.bannedUntil || 0, banned: !!m.banned, reason: m.reason || "",
-      plan: m.plan || p.plan || "Free", planLocked: !!m.plan, dailyLimit: m.dailyLimit || 0,
+      plan: m.plan || "Free", planLocked: !!m.plan, // 유저가 직접 쓸 수 있는 문서의 값은 믿지 않아요 dailyLimit: m.dailyLimit || 0,
     };
   }).sort((a, b) => b.lastLogin - a.lastLogin);
 }
@@ -318,6 +318,7 @@ async function me(req, env, url) {
   const u = await tokenUser(req, env);
   if (!u) return json({ error: "로그인이 필요해요" }, 401);
   const out = { admin: String(u.email || "").toLowerCase() === String(env.ADMIN_EMAIL || ADMIN_DEFAULT).toLowerCase() && !!u.emailVerified };
+  if (out.admin) out.plan = "Max";
   if (saOf(env) && !out.admin) {
     const m = await getMod(env, u.localId);
     const until = m.bannedUntil || 0;
@@ -339,13 +340,115 @@ async function tokenUser(req, env) {
   return (await lk.json())?.users?.[0] || null;
 }
 
+// ---------- 예약 작업 (모델 없이: 위키백과·공공데이터로 찾은 답을 메일로) ----------
+// 앱이 /api/tasks/sync 로 작업 목록을 보내면 Firestore tasks/{uid} 에 저장하고, 5분마다 도는 크론이 시간이 된 작업을 실행해요.
+// 결과는 로그인한 본인(이메일 인증된) 주소로만 보내요.
+const FAR = 4102444800000;
+const WDN = ["월", "화", "수", "목", "금", "토", "일"];
+function nextDue(t, tzo, from) {
+  const [h, m] = String(t.time || "08:00").split(":").map(Number), off = tzo * 60000;
+  const d = new Date(from - off);
+  d.setUTCHours(h || 0, m || 0, 0, 0);
+  const want = t.freq === "weekly" ? (WDN.indexOf(t.day) + 1) % 7 : null;
+  for (let i = 0; i < 9 && (d.getTime() <= from - off || (want !== null && d.getUTCDay() !== want)); i++) d.setUTCDate(d.getUTCDate() + 1);
+  return d.getTime() + off;
+}
+async function answerText(env, q) {
+  const kst = new Date(Date.now() + 9 * 3600e3);
+  if (/오늘의\s*(지식|위키)/.test(q)) {
+    const r = await fetch("https://ko.wikipedia.org/api/rest_v1/page/random/summary", { headers: { "user-agent": UA } });
+    const d = await r.json();
+    return `${d.title}\n\n${d.extract}\n\n${d.content_urls?.desktop?.page || ""}`;
+  }
+  if (/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q) && env.DATA_GO_KR_KEY) {
+    const m = q.match(/(\d{1,2})\s*월/), y = q.match(/(20\d{2})\s*년/);
+    const yy = y ? y[1] : String(kst.getUTCFullYear()), mm = m ? m[1] : String(kst.getUTCMonth() + 1);
+    const j = await (await holidays(env, yy, mm)).json();
+    if (!j.items) return "공휴일 정보를 가져오지 못했어요.";
+    return `${yy}년 ${mm}월 공휴일\n\n` + (j.items.length ? j.items.map((i) => `· ${+i.date.slice(4, 6)}월 ${+i.date.slice(6)}일 ${i.name}`).join("\n") : "이 달에는 공휴일이 없어요.") + "\n\n출처: 공공데이터포털 · 한국천문연구원 특일 정보";
+  }
+  const kw = q.replace(/[?？!.]/g, " ").replace(/(은|는|이|가|을|를|에 대해|에대해)?\s*(누가 만들었어|누가 만들었나요|뭐야|무엇인가요|뭔가요|알려 ?줘|설명해 ?줘|쉽게|자세히)/g, " ").replace(/\s+/g, " ").trim() || q;
+  const r = await wiki(kw);
+  if (!r.found) return `“${q}”에 대해 위키백과에서 찾지 못했어요. 질문을 더 짧은 단어로 바꿔 보세요.`;
+  const top = r.results[0];
+  return `${top.title}\n\n${(top.extract || "").split(/(?<=[.다요])\s+/).slice(0, 3).join(" ")}\n\n출처: ${top.url}`;
+}
+async function tasksSync(req, env, url) {
+  const origin = req.headers.get("origin");
+  if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);
+  if (!saOf(env) || !env.RESEND_API_KEY) return json({ error: "서버에서 예약 작업을 아직 쓸 수 없어요" }, 503);
+  const u = await tokenUser(req, env);
+  if (!u?.email) return json({ error: "로그인이 필요해요" }, 401);
+  if (!u.emailVerified) return json({ error: "이메일 인증 뒤에 메일로 받을 수 있어요" }, 403);
+  let b = {};
+  try { b = await req.json(); } catch {}
+  const tzo = Math.max(-840, Math.min(840, parseInt(b.tzo, 10) || 0));
+  const old = (await fsBatch(env, ["tasks/" + u.localId]))["tasks/" + u.localId];
+  let prev = [];
+  try { prev = JSON.parse(old?.tasks || "[]"); } catch {}
+  const now = Date.now();
+  const list = (Array.isArray(b.tasks) ? b.tasks : []).slice(0, 10).map((t) => {
+    const x = { id: String(t.id || "").slice(0, 30), name: String(t.name || "").slice(0, 30), prompt: String(t.prompt || "").slice(0, 300), freq: ["daily", "weekly", "once"].includes(t.freq) ? t.freq : "daily", day: WDN.includes(t.day) ? t.day : "월", time: /^\d{2}:\d{2}$/.test(t.time) ? t.time : "08:00", on: t.on !== false };
+    const p = prev.find((q) => q.id === x.id);
+    const same = p && p.freq === x.freq && p.day === x.day && p.time === x.time && p.on === x.on && old?.tzo === tzo;
+    x.next = x.on ? (same && p.next ? p.next : nextDue(x, tzo, now)) : 0;
+    if (p?.last) x.last = p.last;
+    return x;
+  }).filter((x) => x.id && x.prompt);
+  const dues = list.filter((t) => t.on && t.next).map((t) => t.next);
+  await fsSetDoc(env, "tasks/" + u.localId, { email: u.email, tzo, due: dues.length ? Math.min(...dues) : FAR, tasks: JSON.stringify(list), updated: now });
+  return json({ ok: true, count: list.length });
+}
+async function runTasks(env, ctx) {
+  const sa = saOf(env);
+  if (!sa || !env.RESEND_API_KEY) return 0;
+  const now = Date.now();
+  let sent = 0;
+  const res = await gfetch(env, fsBase(sa) + ":runQuery", {
+    method: "POST",
+    body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "tasks" }], where: { fieldFilter: { field: { fieldPath: "due" }, op: "LESS_THAN_OR_EQUAL", value: { integerValue: String(now) } } }, limit: 25 } }),
+  });
+  for (const row of res) {
+    if (!row.document) continue;
+    const uid = row.document.name.split("/").pop(), doc = fsObj(row.document.fields);
+    let tasks = [];
+    try { tasks = JSON.parse(doc.tasks || "[]"); } catch {}
+    const mod = await getMod(env, uid);
+    const banned = mod.banned || (mod.tempBan && mod.bannedUntil > now);
+    for (const t of tasks) {
+      if (!t.on || !t.next || t.next > now) continue;
+      if (!banned) {
+        if (sent >= 20) continue; // 한 번에 너무 많이 보내지 않아요. 다음 크론에서 이어서 보내요.
+        let ok = false;
+        try {
+          const text = await answerText(env, t.prompt);
+          const r = await fetch("https://api.resend.com/emails", {
+            method: "POST", headers: { authorization: "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
+            body: JSON.stringify({ from: env.MAIL_FROM || "LAGO <onboarding@resend.dev>", to: [doc.email], subject: `[LAGO] 예약 작업 · ${t.name}`, text: `${text}\n\n—\n예약 작업 “${t.name}”의 결과예요. 끄거나 바꾸려면 LAGO → 예약 작업에서 바꿔 주세요.` }),
+          });
+          ok = r.ok;
+        } catch {}
+        sent++;
+        bump(env, ctx, "taskRun");
+        bump(env, ctx, ok ? "mailSent" : "mailFail");
+        t.err = ok ? "" : "메일을 보내지 못했어요";
+      }
+      t.last = now;
+      if (t.freq === "once") { t.on = false; t.next = 0; } else t.next = nextDue(t, doc.tzo || 0, now);
+    }
+    const dues = tasks.filter((t) => t.on && t.next).map((t) => t.next);
+    await fsSetDoc(env, "tasks/" + uid, { email: doc.email, tzo: doc.tzo || 0, due: dues.length ? Math.min(...dues) : FAR, tasks: JSON.stringify(tasks), updated: now });
+  }
+  return sent;
+}
+
 // ---------- 관리자 ----------
 // 관리자(ADMIN_EMAIL, 기본 lagem1535@gmail.com)가 로그인하면 /#admin 에서 키를 넣고 사용량을 볼 수 있어요.
 // 키는 Workers KV(ADMIN_KV)에 저장해요. 대시보드의 시크릿이 있으면 그쪽이 우선이에요.
 // FIREBASE_CONFIG는 로그인 확인에 쓰이는 값이라 여기서 바꾸지 못하고 대시보드에서만 넣어요.
 const ADMIN_DEFAULT = "lagem1535@gmail.com";
 const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT"];
-const STAT_NAMES = ["visits", "wiki", "holidays", "kidConsent", "notify", "mailSent", "mailFail"];
+const STAT_NAMES = ["visits", "wiki", "holidays", "kidConsent", "notify", "taskRun", "mailSent", "mailFail"];
 
 let secCache = { at: 0, v: {} };
 async function withSecrets(env) {
@@ -456,7 +559,7 @@ async function adminApi(req, env, ctx, url, raw) {
 
 export default {
   async scheduled(event, rawEnv, ctx) {
-    ctx.waitUntil((async () => { const env = await withSecrets(rawEnv); try { await sweep(env); } catch {} })());
+    ctx.waitUntil((async () => { const env = await withSecrets(rawEnv); try { await sweep(env); } catch {} try { await runTasks(env, ctx); } catch {} })());
   },
   async fetch(req, rawEnv, ctx) {
     const raw = rawEnv;
@@ -465,6 +568,7 @@ export default {
     const p = url.pathname;
     if (!p.startsWith("/api/")) return env.ASSETS.fetch(req);
     try {
+      if (p === "/api/tasks/sync") return req.method === "POST" ? await tasksSync(req, env, url) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/me") return req.method === "GET" ? await me(req, env, url) : json({ error: "GET만 돼요" }, 405);
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
@@ -476,6 +580,7 @@ export default {
           firebase: readFirebase(env),
           publicData: !!env.DATA_GO_KR_KEY,
           mail: !!env.RESEND_API_KEY,
+          tasks: !!(saOf(env) && env.RESEND_API_KEY),
           wiki: true,
         });
       }
