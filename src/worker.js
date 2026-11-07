@@ -581,10 +581,16 @@ async function adminApi(req, env, ctx, url, raw) {
     if (!o.url) return json({ error: "테스트할 주소가 없어요" }, 400);
     try {
       const t = new URL(o.url);
-      if (!t.searchParams.has("serviceKey") && /data\.go\.kr/i.test(o.provider + t.host)) t.searchParams.set("serviceKey", o.key);
-      const r = await fetch(t.toString(), { headers: { "user-agent": UA, accept: "application/json, application/xml, */*" } });
-      const txt = (await r.text()).slice(0, 200).replace(/\s+/g, " ");
-      return json({ ok: r.ok, status: r.status, sample: txt.replace(o.key, "***") });
+      const hdr = { "user-agent": UA, accept: "application/json, application/xml, */*" };
+      const bearer = /hugging|github/i.test(o.provider);
+      if (bearer) { hdr.authorization = "Bearer " + o.key; if (/github/i.test(o.provider)) hdr.accept = "application/vnd.github+json"; }
+      else if (!t.searchParams.has("serviceKey") && /data\.go\.kr/i.test(o.provider + t.host)) t.searchParams.set("serviceKey", o.key);
+      const r = await fetch(t.toString(), { headers: hdr });
+      const raw = await r.text();
+      let sample;
+      if (bearer) { let j = {}; try { j = JSON.parse(raw); } catch {} const who = j.name || j.login || j.fullname; sample = r.ok ? (who ? "계정: " + who : "확인됐어요") : (j.message || j.error || "거절됐어요 (토큰을 확인해 주세요)"); }
+      else sample = raw.slice(0, 200).replace(/\s+/g, " ").split(o.key).join("***");
+      return json({ ok: r.ok, status: r.status, sample });
     } catch (e) { return json({ error: "연결하지 못했어요: " + String(e.message || e) }, 502); }
   }
   if (p === "/api/admin/secret" || p === "/api/admin/secret/delete") {
