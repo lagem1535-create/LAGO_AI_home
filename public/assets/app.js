@@ -208,7 +208,7 @@ ${on?`<div class="row"><input readonly value="${link}" id="shareLink" aria-label
 <div class="prow" style="padding:6px 0"><span class="grow" style="font-size:13px">출처 카드 함께 보여 주기</span><button class="switch" role="switch" aria-checked="${c.shareSrc!==false}" data-sharesrc="1"></button></div>
 <div class="prow" style="padding:6px 0;border:0"><span class="grow" style="font-size:13px">내 이름 표시</span><button class="switch" role="switch" aria-checked="${!!c.shareName}" data-sharename="1"></button></div>
 <span class="muted" style="font-size:12px">링크를 받은 사람은 지금까지의 대화를 읽기만 할 수 있어요. 이후에 보낸 메시지는 보이지 않아요.</span>`:`<span class="muted" style="font-size:12.5px">지금은 나만 볼 수 있어요. "링크가 있는 사람"을 고르면 공유 링크가 만들어져요.</span>`}</div></div>`;}
-function aMsg(m,code){if(m.loading)return `<div class="am"><div class="who">${WM(12)}</div><span class="status think" data-think="${code?"c":"t"}">${ic(code?"brain":"globe",14)} <span class="tstage">${code?"생각하는 중":"질문 이해하는 중"}</span> <span class="tsec"></span> <span class="typing"><i></i><i></i><i></i></span></span></div>`;
+function aMsg(m,code){if(m.loading)return `<div class="am"><div class="who">${WM(12)}</div><span class="status think" data-think="${code?"c":"t"}">${ic(code?"brain":"globe",14)} <span class="tstage">${code?"생각하는 중":"질문 이해하는 중"}</span> <span class="tsec"></span> <span class="typing"><i></i><i></i><i></i></span></span>${code?"":`<div class="peek" data-peek>위키 · 뉴스 · 법령 · 판례 · 우리말샘 · 통계에서 찾는 중</div>`}</div>`;
 const fb=`<div class="acts"><button data-act="copy" data-text="${esc(m.plain||"")}" aria-label="복사">${ic("copy",16)}</button><button data-act="like" aria-pressed="${m.like===1}" data-mid="${m.id}" aria-label="좋아요">${ic("thumb",16)}</button><button data-act="dislike" aria-pressed="${m.like===-1}" data-mid="${m.id}" aria-label="별로예요"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" style="transform:rotate(180deg)">${P.thumb}</svg></button><span>${esc(m.meta||"")}</span></div>`;
 return `<div class="am"><div class="who">${WM(12)}</div>${m.html||`<p class="answer">${esc(m.plain||"").replace(/\n/g,"<br>")}</p>`}${fb}</div>`;}
 function answerFor(q,agent){const t=q.replace(/\s/g,"");
@@ -251,7 +251,9 @@ const modelNote='<p class="muted" style="margin:8px 0 0;font-size:12.5px">Fonte 
 async function agentLive(text,ag){const r=await modelCall({task:"agent",q:text,agent:{name:ag.name,instructions:ag.ins||ag.desc||""}});
 if(r.ok&&r.d.answer)return{html:`<span class="status">${ic(ag.ic||"bot",14)} ${esc(ag.name)} 에이전트</span><p class="answer">${esc(r.d.answer).replace(/\n/g,"<br>")}</p>${modelNote}`,plain:r.d.answer,meta:ag.name};
 if(r.status===429||r.status===403)return{html:`<p class="answer">${esc(r.d.error||"지금은 답할 수 없어요")}</p>`,plain:r.d.error||"",meta:ag.name};return null;}
+function peekSet(t){document.querySelectorAll("[data-peek]").forEach(e=>e.innerHTML=t);}
 async function liveAnswer(q,hist){try{
+if(S.api.model&&S.mode==="Fonte")fetch("/api/wiki?q="+encodeURIComponent(q)).then(r=>r.json()).then(d=>{if(d&&d.found)peekSet("위키 보는 중: "+d.results.slice(0,3).map(x=>"<b>"+esc(x.title)+"</b>").join(" · ")+" <span class='muted'>· 뉴스·법령·판례도 찾는 중</span>");}).catch(()=>{});
 if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const m=q.match(/(\d{1,2})\s*월/),y=q.match(/(20\d{2})\s*년/);const now=new Date();const yy=y?y[1]:now.getFullYear(),mm=m?m[1]:now.getMonth()+1;
 const r=await fetch(`/api/holidays?year=${yy}&month=${mm}`);const d=await r.json();if(!r.ok)throw 0;
 const list=d.items.length?`<ul style="margin:6px 0 0;padding-left:20px">${d.items.map(i=>`<li>${i.date.slice(4,6)*1}월 ${i.date.slice(6)*1}일 · ${esc(i.name)}</li>`).join("")}</ul>`:"<br>이 달에는 공휴일이 없어요.";
