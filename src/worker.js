@@ -113,6 +113,56 @@ async function chat(req, env, url, ctx) {
   const histTxt = hist.length ? "이전 대화:\n" + hist.map((h) => (h.r === "u" ? "사용자: " : "LAGO: ") + h.t).join("\n") + "\n\n" : "";
   if (task === "ask") {
     // 1순위: Kaggle 서버의 검색 DB(위키·뉴스·법령·판례…)로 답하기 (/ask). 없거나 아직 올리는 중이면 아래 위키백과 방식으로 대신해요.
+    const shapeRefs = (arr) => (Array.isArray(arr) ? arr : []).slice(0, 8).map((x) => ({
+      n: +x.n || 0, title: String(x.title || "").slice(0, 120), url: /^https?:\/\//.test(x.url || "") ? String(x.url).slice(0, 300) : "",
+      db: String(x.db || "").slice(0, 20), date: String(x.date || "").slice(0, 10), publisher: String(x.publisher || "").slice(0, 40),
+    }));
+    if (b.stream) {   // 찾는 중인 자료를 먼저 보내 주는 방식 (/ask_stream). 안 되면 아래 일반 방식으로 넘어가요.
+      const acs = new AbortController();
+      const ts = setTimeout(() => acs.abort(), 90000);
+      try {
+        const rs = await fetch(env.MODEL_URL + "/ask_stream", {
+          method: "POST", signal: acs.signal,
+          headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
+          body: JSON.stringify({ q, sq, hist_txt: histTxt, max_new_tokens: maxTok }),
+        });
+        if (rs.ok && rs.body) {
+          const enc = new TextEncoder(), dec = new TextDecoder();
+          const out = new ReadableStream({
+            async start(ctrl) {
+              const send = (o) => ctrl.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+              const rd = rs.body.getReader(); let buf = "", fin = false;
+              try {
+                for (;;) {
+                  const { done, value } = await rd.read();
+                  if (value) buf += dec.decode(value, { stream: true });
+                  let i;
+                  while ((i = buf.indexOf("\n")) >= 0) {
+                    const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+                    if (!line) continue;
+                    let m; try { m = JSON.parse(line); } catch { continue; }
+                    if (m.t === "refs") send({ t: "refs", refs: shapeRefs(m.refs) });
+                    else if (m.t === "done") {
+                      const a = String(m.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+                      if (!a) { send({ t: "error", error: "빈 답이 왔어요" }); fin = true; break; }
+                      const rf = shapeRefs(m.refs);
+                      const c2 = [...new Set([...a.matchAll(/\[(\d)\]/g)].map((x) => +x[1]))].filter((n) => n >= 1 && n <= rf.length);
+                      send({ t: "done", answer: a, task, sources: rf.map((x) => ({ ...x, cited: c2.includes(x.n) })), refs: rf.length, dbs: [...new Set(rf.map((x) => x.db))], viaDb: true });
+                      fin = true;
+                    }
+                  }
+                  if (done || fin) break;
+                }
+                if (!fin) send({ t: "error", error: "모델 서버 응답이 끊겼어요" });
+              } catch (e) { send({ t: "error", error: "모델 서버 연결이 끊겼어요" }); }
+              clearTimeout(ts); ctrl.close();
+            },
+          });
+          return new Response(out, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" } });
+        }
+      } catch (e) { /* 일반 방식으로 */ }
+      clearTimeout(ts);
+    }
     const ac0 = new AbortController();
     const t0 = setTimeout(() => ac0.abort(), 90000);
     try {
