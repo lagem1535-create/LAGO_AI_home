@@ -78,7 +78,10 @@ async function wiki(q0) {
 
 // ---------- Fonte(FACT) 답변: 위키백과에서 찾은 참고자료 + 학습된 모델 ----------
 // 모델은 캐글/GPU 서버에서 따로 돌고(MODEL_URL), 여기서는 참고자료를 붙여 보내고 답을 받아 와요.
-const FACT_SYS = "[MODE:FACT] 너는 LAGO AI다. 참고자료에 근거해서만 답하고, 근거 번호를 [1]처럼 붙여라. 자료에 없으면 '제공된 자료에는 해당 내용이 없습니다'라고 답하라. URL을 직접 쓰지 마라.";
+const FACT_SYS = "[MODE:FACT] 너는 LAGO AI다. 참고자료에 근거해서 답하고, 근거 번호를 [1]처럼 붙여라. " +
+  "자료에 없어도 누구나 아는 일반 상식이면 짧게 답하고 끝에 '(일반 상식, 출처 없음)'을 붙여라. " +
+  "특정 인물·숫자·날짜·사건·최신 정보처럼 확인이 필요한 내용이 자료에 없으면 " +
+  "'제공된 자료에는 해당 내용이 없습니다'라고 답하라. URL을 직접 쓰지 마라."; // fact_2·fact_5의 SYS_FACT와 똑같이 둘 것 (학습한 형식)
 const CHAT_DAILY = 50;
 async function chat(req, env, url, ctx) {
   const origin = req.headers.get("origin");
