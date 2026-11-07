@@ -534,7 +534,15 @@ async function adminStatus(env, raw) {
       days.push(row);
     }
   }
-  return { kv: !!env.ADMIN_KV, firebase: !!raw.FIREBASE_CONFIG, secrets, days };
+  const apis = [];
+  if (env.ADMIN_KV) {
+    try {
+      const l = await env.ADMIN_KV.list({ prefix: "api:", limit: 100 });
+      for (const k of l.keys) { try { const o = JSON.parse(await env.ADMIN_KV.get(k.name)); apis.push({ id: o.id, provider: o.provider, name: o.name, desc: o.desc, url: o.url || "", hint: hint(o.key || "", "X"), created: o.created }); } catch {} }
+    } catch {}
+    apis.sort((x, y) => (y.created || 0) - (x.created || 0));
+  }
+  return { kv: !!env.ADMIN_KV, firebase: !!raw.FIREBASE_CONFIG, secrets, days, apis };
 }
 async function adminApi(req, env, ctx, url, raw) {
   const a = await adminAuth(req, raw, url);
@@ -551,6 +559,33 @@ async function adminApi(req, env, ctx, url, raw) {
   if (p === "/api/admin/users/action") {
     if (!saOf(env)) return json({ error: "FIREBASE_SERVICE_ACCOUNT가 없어요", needSa: true }, 503);
     try { return await userAction(env, a.email, b); } catch (e) { return json({ error: String(e.message || e) }, 502); }
+  }
+  if (p === "/api/admin/api" || p === "/api/admin/api/delete" || p === "/api/admin/api/test") {
+    if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+    if (p === "/api/admin/api") {
+      const provider = String(b.provider || "").trim().slice(0, 40), name = String(b.name || "").trim(), key = String(b.key || "").trim(), desc = String(b.desc || "").trim(), u = String(b.url || "").trim();
+      if (!provider || !name || name.length > 40) return json({ error: "제공처와 이름(40자 이하)을 확인해 주세요" }, 400);
+      if (!key || key.length > 500) return json({ error: "API 키를 확인해 주세요" }, 400);
+      if (desc.length > 300) return json({ error: "설명은 300자 이하로 써 주세요" }, 400);
+      if (u && !/^https:\/\/[^\s]{4,300}$/.test(u)) return json({ error: "주소는 https://로 시작해야 해요" }, 400);
+      const cnt = (await env.ADMIN_KV.list({ prefix: "api:", limit: 100 })).keys.length;
+      if (cnt >= 50) return json({ error: "API는 50개까지 넣을 수 있어요" }, 400);
+      const id = crypto.randomUUID().slice(0, 8);
+      await env.ADMIN_KV.put("api:" + id, JSON.stringify({ id, provider, name, key, desc, url: u, created: Date.now() }));
+      return json({ ok: true, id });
+    }
+    const id = String(b.id || "").replace(/[^a-z0-9-]/gi, "");
+    if (p.endsWith("/delete")) { await env.ADMIN_KV.delete("api:" + id); return json({ ok: true }); }
+    let o; try { o = JSON.parse(await env.ADMIN_KV.get("api:" + id)); } catch {}
+    if (!o) return json({ error: "없는 API예요" }, 404);
+    if (!o.url) return json({ error: "테스트할 주소가 없어요" }, 400);
+    try {
+      const t = new URL(o.url);
+      if (!t.searchParams.has("serviceKey") && /data\.go\.kr/i.test(o.provider + t.host)) t.searchParams.set("serviceKey", o.key);
+      const r = await fetch(t.toString(), { headers: { "user-agent": UA, accept: "application/json, application/xml, */*" } });
+      const txt = (await r.text()).slice(0, 200).replace(/\s+/g, " ");
+      return json({ ok: r.ok, status: r.status, sample: txt.replace(o.key, "***") });
+    } catch (e) { return json({ error: "연결하지 못했어요: " + String(e.message || e) }, 502); }
   }
   if (p === "/api/admin/secret" || p === "/api/admin/secret/delete") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
