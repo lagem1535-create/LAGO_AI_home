@@ -481,3 +481,10 @@ input[type=file]::file-selector-button:hover{background:#DCE6FF}
 
 .splash{min-height:100vh;display:grid;place-items:center;background:var(--bg,#F6F8FD);animation:splashIn .25s ease .15s both}
 @keyframes splashIn{from{opacity:0}to{opacity:1}}
+
+.srcsum{display:grid;align-self:stretch;max-width:100%}.srcsum>summary{justify-self:start}.srcsum>summary{cursor:pointer;list-style:none}.srcsum>summary::-webkit-details-marker{display:none}
+.srcsum .chev{display:inline-flex;transition:transform .2s}.srcsum[open] .chev{transform:rotate(180deg)}
+.status.think{background:linear-gradient(100deg,#EFF3F7 30%,#dfe8f5 50%,#EFF3F7 70%) 0 0/250% 100%;animation:shim 1.6s linear infinite}
+.status.think .ic{animation:pulse 1.2s ease-in-out infinite}
+@keyframes shim{to{background-position:-150% 0}}@keyframes pulse{50%{opacity:.35;transform:scale(.85)}}
+@media (prefers-reduced-motion:reduce){.status.think,.status.think .ic{animation:none}}

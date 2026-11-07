@@ -172,7 +172,7 @@ async function chat(req, env, url, ctx) {
     let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return json({ answer: ans, task, sources: cited.map((n) => ({ n, title: refs[n - 1].title, url: refs[n - 1].url })), refs: refs.length });
+    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: "위키백과", cited: cited.includes(i + 1) })), refs: refs.length });
   } catch (e) {
     return json({ error: "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
   } finally { clearTimeout(t); }
