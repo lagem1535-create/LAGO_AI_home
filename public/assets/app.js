@@ -33,6 +33,7 @@ const DEMO={email:"dani@lago.ai",name:"다니",plan:"Pro"};
 const S={pinTools:[],conn:false,services:{},customMcp:[],flyout:false,flyTool:"translate",kidReqs:[],tasks:[],sideOff:false,user:null,area:"talk",mode:"Fonte",pinned:["p1"],study:false,timeReq:null,extra:0,ptab:"general",cmode:"Code Corrente",think:1,web:0,menu:false,drawer:false,chats:[],cur:null,projects:SEED_PROJECTS.map(p=>({...p})),curProject:null,temp:false,learn:true,learnImg:true,confirm:null,preview:false,todos:[{t:"장보기",d:true},{t:"LAGO 데이터셋 정리",d:false},{t:"운동 30분",d:false}],kid:{sent:false,email:""},myAgents:[],favs:[],agentTab:"lago",agentCat:"전체",curAgent:null,editAgent:null,acct:false,goccia:false,gview:null,verify:"card",pendingVerify:null};
 const PKEYS=["pinTools","services","customMcp","kidReqs","extra","limit","night","kThink","kCode","kStudy","kBreak","tasks","guardian"];const pk=()=>Object.fromEntries(PKEYS.map(k=>[k,S[k]]));
 function syncReq(){const r=(S.kidReqs||[])[0];S.timeReq=r?(r.status==='pending'?'wait':r.status):null;}
+function bootDone(){if(S.booting){S.booting=false;render();}}
 function loadUser(){const s=store.get("lago_session",null);if(!s)return;S.user=s;const d=store.get("lago_data_"+s.email,null);if(d){PKEYS.forEach(k=>{if(d[k]!=null)S[k]=d[k];});syncReq();S.chats=d.chats||[];S.learn=d.learn!==false;S.learnImg=d.learnImg!==false;if(d.mode&&TALK_MODES.some(m=>m.id===d.mode))S.mode=d.mode;if(d.pinned)S.pinned=d.pinned;S.myAgents=d.myAgents||[];S.favs=d.favs||[];if(d.think!=null)S.think=d.think;if(d.web!=null)S.web=d.web;}}
 function save(){if(!S.user)return;if(S.user.uid){fbSave();return;}store.set("lago_data_"+S.user.email,{myAgents:S.myAgents,favs:S.favs,pinned:S.pinned,chats:S.chats.filter(c=>!c.temp&&!c.kid),learn:S.learn,learnImg:S.learnImg,mode:S.mode,think:S.think,web:S.web,...pk()});}
 
@@ -226,14 +227,14 @@ await loadScript(FB_CDN+"firebase-app-compat.min.js");await Promise.all([loadScr
 const app=firebase.initializeApp(cfg);S.fb={auth:firebase.auth(),db:firebase.firestore()};
 S.fb.auth.languageCode="ko";
 S.fb.auth.onAuthStateChanged(async u=>{
- if(!u){if(S.unsub){S.unsub();S.unsub=null;}if(S.user&&S.user.uid){S.user=null;S.banned=null;S.chats=[];S.cur=null;go("login");}render();return;}
- let d={};try{const snap=await S.fb.db.doc("users/"+u.uid+"/data/main").get();if(snap.exists)d=snap.data();}catch(e){toast("저장된 데이터를 불러오지 못했어요 (Firestore 규칙을 확인해 주세요)");}
+ if(!u){store.del("lago_fbhint");S.booting=false;if(S.unsub){S.unsub();S.unsub=null;}if(S.user&&S.user.uid){S.user=null;S.banned=null;S.chats=[];S.cur=null;go("login");}render();return;}
+ store.set("lago_fbhint",1);let d={};try{const snap=await S.fb.db.doc("users/"+u.uid+"/data/main").get();if(snap.exists)d=snap.data();}catch(e){toast("저장된 데이터를 불러오지 못했어요 (Firestore 규칙을 확인해 주세요)");}
  S.user={uid:u.uid,email:u.email,name:d.name||u.displayName||(u.email||"").split("@")[0],plan:d.plan||"Free",planBase:d.plan||"Free",verified:!!u.emailVerified};
  PKEYS.forEach(k=>{if(d[k]!=null)S[k]=d[k];});syncReq();S.chats=d.chats||[];S.myAgents=d.myAgents||[];S.favs=d.favs||[];if(d.pinned)S.pinned=d.pinned;S.learn=d.learn!==false;S.learnImg=d.learnImg!==false;if(d.mode&&TALK_MODES.some(m=>m.id===d.mode))S.mode=d.mode;if(d.think!=null)S.think=d.think;
  if(!snap_exists(d)&&!S.signingUp)fbSave(true);
  if(S.unsub)S.unsub();S.unsub=S.fb.db.doc("users/"+u.uid+"/data/main").onSnapshot(sn=>{if(!sn.exists||sn.metadata.hasPendingWrites||fbT)return;const x=sn.data();const before=pendingReq();let ch=false;PKEYS.forEach(k=>{if(x[k]!=null&&JSON.stringify(S[k])!==JSON.stringify(x[k])){S[k]=x[k];ch=true;}});if(ch){syncReq();render();if(!S.goccia&&pendingReq()>before)toast("지우가 시간을 더 요청했어요");}});
- const r=route();if(["login","join","verify","kid"].includes(r)||!r){if(PATHMODE&&S.after&&S.after!=="/login"){const a=S.after;S.after=null;history.replaceState(null,"",a);render();}else go("home",true);}else render();meCheck();});
-}catch(e){S.fbErr=true;toast("Firebase를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.");}}
+ S.booting=false;const r=route();if(["login","join","verify","kid"].includes(r)||!r){if(PATHMODE&&S.after&&S.after!=="/login"){const a=S.after;S.after=null;history.replaceState(null,"",a);render();}else go("home",true);}else render();meCheck();});
+}catch(e){bootDone();S.fbErr=true;toast("Firebase를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.");}}
 const snap_exists=d=>d&&Object.keys(d).length>0;
 let fbT=null;
 function fbSave(now){if(!S.fb||!S.user||!S.user.uid)return;syncTasks();clearTimeout(fbT);const run=()=>{fbT=0;const data=JSON.parse(JSON.stringify({name:S.user.name,plan:S.user.planBase||S.user.plan||"Free",myAgents:S.myAgents,favs:S.favs,pinned:S.pinned,chats:S.chats.filter(c=>!c.temp&&!c.kid),learn:S.learn,learnImg:S.learnImg,mode:S.mode,think:S.think,...pk(),updated:Date.now()}));S.fb.db.doc("users/"+S.user.uid+"/data/main").set(data).catch(()=>toast("저장하지 못했어요. 인터넷이나 Firestore 규칙을 확인해 주세요."));};now?run():fbT=setTimeout(run,800);}
@@ -484,13 +485,14 @@ sc.addEventListener("scroll",upd,{passive:true});upd();}
 let brandStage=null;
 function fixPops(){const c=document.querySelector(".composer");if(!c)return;const r=c.getBoundingClientRect();document.querySelectorAll(".pop").forEach(pp=>pp.classList.toggle("down",r.top<340&&innerHeight-r.bottom>r.top));}
 function render(){const r=route();
+if(S.booting&&!S.user){$("#app").innerHTML=`<div class="splash" role="status" aria-label="불러오는 중">${WM(30)}</div>`;return;}
 if(S.banned&&S.user){$("#app").innerHTML=vBanned();return;}
 if(!S.user&&!PUBLIC.includes(r)){if(PATHMODE&&!S.after)S.after=location.pathname;go("login",true);return;}
 if(S.user&&(r==="login"||r==="join")){go("home",true);return;}
 if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-extract","tool-summary"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");go("home",true);return;}
 if(r==="code"||r==="code-chat"||r==="code-folder")S.area="code";else if(["home","chat","projects","project","agents","agent","agent-new"].includes(r))S.area="talk";
 const v={"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
-const html=v();if(!html)return;$("#app").innerHTML=html;
+const html=v();if(!html)return;const rk=location.pathname+location.hash,oldSc=document.querySelector(".main > .scroll"),keepTop=oldSc&&S.rk===rk?oldSc.scrollTop:0;S.rk=rk;$("#app").innerHTML=html;if(keepTop){const ns=document.querySelector(".main > .scroll");if(ns&&!$("#sc"))ns.scrollTop=keepTop;}
 const sc=$("#sc");if(sc)sc.scrollTop=sc.scrollHeight;
 if($("#bc"))startBrand();
 const q=$("#q");if(q){q.addEventListener("input",()=>{q.style.height="auto";q.style.height=Math.min(180,q.scrollHeight)+"px";});q.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();send(q.value);}});}
@@ -696,5 +698,5 @@ function vBanned(){const b=S.banned||{};let left="";if(b.until){const m=Math.max
 return `<main style="min-height:100dvh;display:grid;place-items:center;padding:24px;background:#F6F8FC"><section class="card" style="max-width:440px;width:100%;text-align:center;display:grid;gap:12px;padding:28px">${WM(22)}<h1 style="font-size:20px;margin:6px 0 0">이용이 정지된 계정이에요</h1><p class="muted" style="margin:0">${b.until?left+" 뒤에 다시 쓸 수 있어요.":"이 계정은 지금 쓸 수 없어요."}${b.reason?`<br>사유: ${esc(b.reason)}`:""}</p><p class="muted" style="font-size:12.5px;margin:0">잘못 정지됐다고 생각하면 관리자에게 문의해 주세요.</p><button class="btn" data-act="logout">로그아웃</button></section></main>`;}
 /* admin.js(별도 파일)가 쓰는 것들을 바깥으로 내보내요 */
 Object.assign(window,{S,shell,topbar,esc,toast,go,route,WM});window.render=()=>render();
-loadUser();render();loadApi();
+loadUser();S.booting=!S.user&&/^https?:$/.test(location.protocol)&&!!store.get("lago_fbhint",0);render();loadApi().finally(()=>{if(!(S.api&&S.api.firebase&&S.api.firebase.apiKey))bootDone();});setTimeout(bootDone,8000);
 })();
