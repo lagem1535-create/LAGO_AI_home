@@ -107,8 +107,33 @@ async function chat(req, env, url, ctx) {
   const task = ["ask", "agent", "translate", "summary"].includes(b.task) ? b.task : "ask";
   let refs = [], system = FACT_SYS, user = "", maxTok = 400;
   if (task === "ask") {
+    // 1순위: Kaggle 서버의 검색 DB(위키·뉴스·법령·판례…)로 답하기 (/ask). 없거나 아직 올리는 중이면 아래 위키백과 방식으로 대신해요.
+    const ac0 = new AbortController();
+    const t0 = setTimeout(() => ac0.abort(), 90000);
+    try {
+      const r0 = await fetch(env.MODEL_URL + "/ask", {
+        method: "POST", signal: ac0.signal,
+        headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
+        body: JSON.stringify({ q, max_new_tokens: maxTok }),
+      });
+      if (r0.ok) {
+        const d0 = await r0.json();
+        const ans0 = String(d0.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+        if (ans0) {
+          const rf = (Array.isArray(d0.refs) ? d0.refs : []).slice(0, 8).map((x) => ({
+            n: +x.n || 0, title: String(x.title || "").slice(0, 120), url: /^https?:\/\//.test(x.url || "") ? String(x.url).slice(0, 300) : "",
+            db: String(x.db || "").slice(0, 20), date: String(x.date || "").slice(0, 10), publisher: String(x.publisher || "").slice(0, 40),
+          }));
+          const cited0 = [...new Set([...ans0.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= rf.length);
+          return json({ answer: ans0, task, sources: cited0.map((n) => rf[n - 1]), refs: rf.length, dbs: [...new Set(rf.map((x) => x.db))], viaDb: true });
+        }
+      } else if (r0.status !== 404 && r0.status !== 503) {
+        return json({ error: "모델이 응답하지 못했어요 (" + r0.status + ")", modelDown: true }, 502);
+      }
+    } catch (e) { /* 모델 서버 연결 문제는 아래 /generate 에서 다시 확인해요 */ }
+    finally { clearTimeout(t0); }
     try { refs = (await wiki(q)).results || []; } catch {}
-    const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(없음)";
+    const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
     user = `참고자료:\n${ctxText}\n\n질문: ${q}`;
   } else if (task === "agent") {
     const ag = b.agent || {};
