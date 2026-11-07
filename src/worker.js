@@ -648,7 +648,7 @@ async function runTasks(env, ctx) {
 // 키는 Workers KV(ADMIN_KV)에 저장해요. 대시보드의 시크릿이 있으면 그쪽이 우선이에요.
 // FIREBASE_CONFIG는 로그인 확인에 쓰이는 값이라 여기서 바꾸지 못하고 대시보드에서만 넣어요.
 const ADMIN_DEFAULT = "lagem1535@gmail.com";
-const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT", "MODEL_URL", "MODEL_KEY", "LLAMA_API_KEY"];
+const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT", "MODEL_URL", "MODEL_KEY", "LLAMA_API_KEY", "MODEL_REGISTER_KEY"];
 const STAT_NAMES = ["visits", "wiki", "holidays", "kidConsent", "notify", "taskRun", "mailSent", "mailFail", "chat"];
 
 let secCache = { at: 0, v: {} };
@@ -723,6 +723,20 @@ async function adminStatus(env, raw) {
     apis.sort((x, y) => (y.created || 0) - (x.created || 0));
   }
   return { kv: !!env.ADMIN_KV, firebase: !!raw.FIREBASE_CONFIG, secrets, days, apis, llama: { url: await llamaUrl(env) } };
+}
+// 태블릿(Termux)이 켜질 때마다 새 임시 주소를 알려 주는 입구. 관리자 로그인 대신 X-Register-Key 로 확인해요.
+async function registerModelUrl(req, env) {
+  const key = env.MODEL_REGISTER_KEY || "";
+  const got = req.headers.get("x-register-key") || "";
+  let diff = key.length ^ got.length;
+  for (let i = 0; i < Math.max(key.length, got.length); i++) diff |= (key.charCodeAt(i) || 0) ^ (got.charCodeAt(i) || 0);
+  if (!key || diff !== 0) return json({ error: "등록 키가 맞지 않아요" }, 401);
+  if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+  let b = {}; try { b = await req.json(); } catch {}
+  const v = String(b.url || "").trim().replace(/\/+$/, "");
+  if (!okLlamaUrl(v) || !/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.trycloudflare\.com$/i.test(v)) return json({ error: "https://….trycloudflare.com 같은 주소만 받아요" }, 400);
+  await env.ADMIN_KV.put("config:llama_url", v);
+  return json({ ok: true, url: v });
 }
 async function adminApi(req, env, ctx, url, raw) {
   const a = await adminAuth(req, raw, url);
@@ -841,6 +855,7 @@ export default {
     try {
       if (p === "/api/tasks/sync") return req.method === "POST" ? await tasksSync(req, env, url) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/me") return req.method === "GET" ? await me(req, env, url) : json({ error: "GET만 돼요" }, 405);
+      if (p === "/api/admin/model-url") return req.method === "POST" ? await registerModelUrl(req, env) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
