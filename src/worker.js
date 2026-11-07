@@ -125,7 +125,7 @@ async function chat(req, env, url, ctx) {
             db: String(x.db || "").slice(0, 20), date: String(x.date || "").slice(0, 10), publisher: String(x.publisher || "").slice(0, 40),
           }));
           const cited0 = [...new Set([...ans0.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= rf.length);
-          return json({ answer: ans0, task, sources: cited0.map((n) => rf[n - 1]), refs: rf.length, dbs: [...new Set(rf.map((x) => x.db))], viaDb: true });
+          return json({ answer: ans0, task, sources: rf.map((x) => ({ ...x, cited: cited0.includes(x.n) })), refs: rf.length, dbs: [...new Set(rf.map((x) => x.db))], viaDb: true });
         }
       } else if (r0.status !== 404 && r0.status !== 503) {
         return json({ error: "모델이 응답하지 못했어요 (" + r0.status + ")", modelDown: true }, 502);
