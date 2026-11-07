@@ -107,3 +107,9 @@ scripts/inline.py       화면을 한 파일로 합쳐요 (미리보기용, # �
 | 예약 작업 | `POST /api/tasks/sync`로 저장 → 5분마다 도는 크론이 시간이 된 작업을 실행 → 위키/공휴일 답을 본인(이메일 인증됨)에게 메일. `FIREBASE_SERVICE_ACCOUNT` + `RESEND_API_KEY` 필요. |
 | 요금제 | 서버(관리자)가 정해요. 유저가 스스로 올릴 수 없어요. 결제는 아직 없어요. |
 | 번역 · 코드 · 에이전트 답 · 서비스 연결(MCP) | 모델/연결이 필요해서 베타 이후에 열려요. 화면에는 닫혀 있다고 표시해요. |
+
+## 모델 서버 (llama.cpp llama-server)
+- 주소: 관리자 화면 → "모델 서버 (llama.cpp)"에서 저장 → KV `config:llama_url` (터널 주소가 바뀔 때마다 여기서 변경)
+- 키: Worker Secret `LLAMA_API_KEY` (Cloudflare 대시보드 또는 관리자 화면의 키와 설정)
+- 질문: Worker `/api/chat` → `POST {주소}/v1/chat/completions` (Bearer 키, stream:false, max_tokens:300), 상태: `GET {주소}/health`
+- 브라우저는 주소·키를 모릅니다. 두 값이 있으면 예전 캐글 방식(MODEL_URL)보다 먼저 씁니다.

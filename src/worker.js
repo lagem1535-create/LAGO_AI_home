@@ -83,10 +83,29 @@ const FACT_SYS = "[MODE:FACT] 너는 LAGO AI다. 참고자료에 근거해서 �
   "특정 인물·숫자·날짜·사건·최신 정보처럼 확인이 필요한 내용이 자료에 없으면 " +
   "'제공된 자료에는 해당 내용이 없습니다'라고 답하라. URL을 직접 쓰지 마라."; // fact_2·fact_5의 SYS_FACT와 똑같이 둘 것 (학습한 형식)
 const CHAT_DAILY = 50;
+// ---------- llama.cpp llama-server (OpenAI 호환) ----------
+// 주소(LLAMA_URL)는 KV(config:llama_url)에, 키(LLAMA_API_KEY)는 Worker Secret에 둬요. 브라우저는 둘 다 모르고 /api/chat 만 불러요.
+async function llamaUrl(env) {
+  if (!env.ADMIN_KV) return "";
+  try { return String((await env.ADMIN_KV.get("config:llama_url")) || "").replace(/\/+$/, ""); } catch { return ""; }
+}
+const okLlamaUrl = (v) => /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(:\d+)?(\/[^\s]*)?$/i.test(v) && v.length <= 300 && !/^https:\/\/(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.)/i.test(v);
+async function llamaChat(env, base, system, user, maxTok, signal) {
+  const r = await fetch(base + "/v1/chat/completions", {
+    method: "POST", signal,
+    headers: { "content-type": "application/json", authorization: "Bearer " + env.LLAMA_API_KEY, "user-agent": UA },
+    body: JSON.stringify({ messages: [{ role: "system", content: system }, { role: "user", content: user }], stream: false, max_tokens: maxTok }),
+  });
+  if (!r.ok) return { status: r.status };
+  const d = await r.json();
+  return { answer: String(d?.choices?.[0]?.message?.content || "") };
+}
+
 async function chat(req, env, url, ctx) {
   const origin = req.headers.get("origin");
   if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);
-  if (!env.MODEL_URL || !env.MODEL_KEY) return json({ error: "모델이 아직 연결되지 않았어요", noModel: true }, 503);
+  const lurl = env.LLAMA_API_KEY ? await llamaUrl(env) : "";
+  if (!lurl && (!env.MODEL_URL || !env.MODEL_KEY)) return json({ error: "모델이 아직 연결되지 않았어요", noModel: true }, 503);
   const u = await tokenUser(req, env);
   if (!u) return json({ error: "로그인이 필요해요" }, 401);
   const isAdmin = String(u.email || "").toLowerCase() === String(env.ADMIN_EMAIL || ADMIN_DEFAULT).toLowerCase() && !!u.emailVerified;
@@ -117,7 +136,7 @@ async function chat(req, env, url, ctx) {
       n: +x.n || 0, title: String(x.title || "").slice(0, 120), url: /^https?:\/\//.test(x.url || "") ? String(x.url).slice(0, 300) : "",
       db: String(x.db || "").slice(0, 20), date: String(x.date || "").slice(0, 10), publisher: String(x.publisher || "").slice(0, 40),
     }));
-    if (b.stream) {   // 찾는 중인 자료를 먼저 보내 주는 방식 (/ask_stream). 안 되면 아래 일반 방식으로 넘어가요.
+    if (b.stream && !lurl) {   // 찾는 중인 자료를 먼저 보내 주는 방식 (/ask_stream). 안 되면 아래 일반 방식으로 넘어가요.
       const acs = new AbortController();
       const ts = setTimeout(() => acs.abort(), 90000);
       try {
@@ -166,6 +185,7 @@ async function chat(req, env, url, ctx) {
     const ac0 = new AbortController();
     const t0 = setTimeout(() => ac0.abort(), 90000);
     try {
+      if (lurl) throw new Error("llama");
       const r0 = await fetch(env.MODEL_URL + "/ask", {
         method: "POST", signal: ac0.signal,
         headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
@@ -212,19 +232,26 @@ async function chat(req, env, url, ctx) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 90000);
   try {
-    const r = await fetch(env.MODEL_URL + "/generate", {
-      method: "POST", signal: ac.signal,
-      headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
-      body: JSON.stringify({ system, user, max_new_tokens: maxTok }),
-    });
-    if (!r.ok) return json({ error: "모델이 응답하지 못했어요 (" + r.status + ")", modelDown: true }, 502);
-    const d = await r.json();
+    let d;
+    if (lurl) {
+      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? 300 : maxTok, ac.signal);
+      if (lr.status) return json({ error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")", modelDown: true }, 502);
+      d = lr;
+    } else {
+      const r = await fetch(env.MODEL_URL + "/generate", {
+        method: "POST", signal: ac.signal,
+        headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
+        body: JSON.stringify({ system, user, max_new_tokens: maxTok }),
+      });
+      if (!r.ok) return json({ error: "모델이 응답하지 못했어요 (" + r.status + ")", modelDown: true }, 502);
+      d = await r.json();
+    }
     let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
     return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: "위키백과", cited: cited.includes(i + 1) })), refs: refs.length });
   } catch (e) {
-    return json({ error: "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
+    return json({ error: lurl ? "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" : "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
   } finally { clearTimeout(t); }
 }
 
@@ -621,7 +648,7 @@ async function runTasks(env, ctx) {
 // 키는 Workers KV(ADMIN_KV)에 저장해요. 대시보드의 시크릿이 있으면 그쪽이 우선이에요.
 // FIREBASE_CONFIG는 로그인 확인에 쓰이는 값이라 여기서 바꾸지 못하고 대시보드에서만 넣어요.
 const ADMIN_DEFAULT = "lagem1535@gmail.com";
-const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT", "MODEL_URL", "MODEL_KEY"];
+const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT", "MODEL_URL", "MODEL_KEY", "LLAMA_API_KEY"];
 const STAT_NAMES = ["visits", "wiki", "holidays", "kidConsent", "notify", "taskRun", "mailSent", "mailFail", "chat"];
 
 let secCache = { at: 0, v: {} };
@@ -695,7 +722,7 @@ async function adminStatus(env, raw) {
     } catch {}
     apis.sort((x, y) => (y.created || 0) - (x.created || 0));
   }
-  return { kv: !!env.ADMIN_KV, firebase: !!raw.FIREBASE_CONFIG, secrets, days, apis };
+  return { kv: !!env.ADMIN_KV, firebase: !!raw.FIREBASE_CONFIG, secrets, days, apis, llama: { url: await llamaUrl(env) } };
 }
 async function adminApi(req, env, ctx, url, raw) {
   const a = await adminAuth(req, raw, url);
@@ -745,6 +772,29 @@ async function adminApi(req, env, ctx, url, raw) {
       else sample = raw.slice(0, 200).replace(/\s+/g, " ").split(o.key).join("***");
       return json({ ok: r.ok, status: r.status, sample });
     } catch (e) { return json({ error: "연결하지 못했어요: " + String(e.message || e) }, 502); }
+  }
+  if (p === "/api/admin/llama" || p === "/api/admin/llama/test") {
+    if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+    if (p === "/api/admin/llama") {
+      const v = String(b.url || "").trim().replace(/\/+$/, "");
+      if (!v) { await env.ADMIN_KV.delete("config:llama_url"); return json({ ok: true, url: "" }); }
+      if (!okLlamaUrl(v)) return json({ error: "https://….trycloudflare.com 같은 주소를 넣어 주세요" }, 400);
+      await env.ADMIN_KV.put("config:llama_url", v);
+      return json({ ok: true, url: v });
+    }
+    const base = await llamaUrl(env);
+    if (!base) return json({ error: "주소를 먼저 저장해 주세요" }, 400);
+    const out = { url: base, keySet: !!env.LLAMA_API_KEY };
+    const t0 = Date.now(), ac = new AbortController(), tm = setTimeout(() => ac.abort(), 12000);
+    try {
+      const r = await fetch(base + "/health", { signal: ac.signal, headers: { "user-agent": UA } });
+      const txt = (await r.text()).slice(0, 200);
+      out.health = r.ok; out.status = r.status; out.ms = Date.now() - t0;
+      out.msg = r.ok ? "서버가 켜져 있어요" : r.status === 503 ? "모델을 올리는 중이에요" : "응답 " + r.status + " " + txt;
+      if (r.ok && !env.LLAMA_API_KEY) out.msg += " · 키(LLAMA_API_KEY)는 아직 없어요";
+    } catch { out.health = false; out.msg = "연결하지 못했어요. 서버가 꺼졌거나 임시 주소가 바뀌었을 수 있어요"; }
+    clearTimeout(tm);
+    return json(out);
   }
   if (p === "/api/admin/secret" || p === "/api/admin/secret/delete") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
@@ -804,7 +854,7 @@ export default {
           mail: !!env.RESEND_API_KEY,
           tasks: !!(saOf(env) && env.RESEND_API_KEY),
           wiki: true,
-          model: !!(env.MODEL_URL && env.MODEL_KEY),
+          model: !!(env.LLAMA_API_KEY && await llamaUrl(env)) || !!(env.MODEL_URL && env.MODEL_KEY),
         });
       }
       if (p === "/api/wiki") {
