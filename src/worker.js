@@ -75,6 +75,55 @@ async function wiki(q0) {
   return { found: out.length > 0, q, topic: q, results: out.slice(0, 3) };
 }
 
+
+// ---------- Fonte(FACT) 답변: 위키백과에서 찾은 참고자료 + 학습된 모델 ----------
+// 모델은 캐글/GPU 서버에서 따로 돌고(MODEL_URL), 여기서는 참고자료를 붙여 보내고 답을 받아 와요.
+const FACT_SYS = "[MODE:FACT] 너는 LAGO AI다. 참고자료에 근거해서만 답하고, 근거 번호를 [1]처럼 붙여라. 자료에 없으면 '제공된 자료에는 해당 내용이 없습니다'라고 답하라. URL을 직접 쓰지 마라.";
+const CHAT_DAILY = 50;
+async function chat(req, env, url, ctx) {
+  const origin = req.headers.get("origin");
+  if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);
+  if (!env.MODEL_URL || !env.MODEL_KEY) return json({ error: "모델이 아직 연결되지 않았어요", noModel: true }, 503);
+  const u = await tokenUser(req, env);
+  if (!u) return json({ error: "로그인이 필요해요" }, 401);
+  const isAdmin = String(u.email || "").toLowerCase() === String(env.ADMIN_EMAIL || ADMIN_DEFAULT).toLowerCase() && !!u.emailVerified;
+  if (saOf(env) && !isAdmin) {
+    const m = await getMod(env, u.localId);
+    if (m.banned || (m.tempBan && (m.bannedUntil || 0) > Date.now())) return json({ error: "사용이 제한된 계정이에요" }, 403);
+  }
+  let b = {}; try { b = await req.json(); } catch {}
+  const q = String(b.q || "").trim().slice(0, 500);
+  if (!q) return json({ error: "질문을 적어 주세요" }, 400);
+  if (env.ADMIN_KV && !isAdmin) {
+    const k = `chat:${u.localId}:${day()}`;
+    const n = parseInt((await env.ADMIN_KV.get(k)) || "0", 10);
+    if (n >= CHAT_DAILY) return json({ error: `하루 ${CHAT_DAILY}번까지 물어볼 수 있어요`, limit: true }, 429);
+    await env.ADMIN_KV.put(k, String(n + 1), { expirationTtl: 172800 });
+  }
+  bump(env, ctx, "chat");
+  let refs = [];
+  try { refs = (await wiki(q)).results || []; } catch {}
+  const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(없음)";
+  const user = `참고자료:\n${ctxText}\n\n질문: ${q}`;
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 90000);
+  try {
+    const r = await fetch(env.MODEL_URL + "/generate", {
+      method: "POST", signal: ac.signal,
+      headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
+      body: JSON.stringify({ system: FACT_SYS, user, max_new_tokens: 400 }),
+    });
+    if (!r.ok) return json({ error: "모델이 응답하지 못했어요 (" + r.status + ")", modelDown: true }, 502);
+    const d = await r.json();
+    let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+    if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
+    const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
+    return json({ answer: ans, sources: cited.map((n) => ({ n, title: refs[n - 1].title, url: refs[n - 1].url })), refs: refs.length });
+  } catch (e) {
+    return json({ error: "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
+  } finally { clearTimeout(t); }
+}
+
 // ---------- 공공데이터포털 예시: 한국천문연구원 특일 정보(공휴일) ----------
 // 활용 신청: data.go.kr 에서 "한국천문연구원_특일 정보" 검색 → 활용신청
 async function holidays(env, year, month) {
@@ -468,8 +517,8 @@ async function runTasks(env, ctx) {
 // 키는 Workers KV(ADMIN_KV)에 저장해요. 대시보드의 시크릿이 있으면 그쪽이 우선이에요.
 // FIREBASE_CONFIG는 로그인 확인에 쓰이는 값이라 여기서 바꾸지 못하고 대시보드에서만 넣어요.
 const ADMIN_DEFAULT = "lagem1535@gmail.com";
-const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT"];
-const STAT_NAMES = ["visits", "wiki", "holidays", "kidConsent", "notify", "taskRun", "mailSent", "mailFail"];
+const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT", "MODEL_URL", "MODEL_KEY"];
+const STAT_NAMES = ["visits", "wiki", "holidays", "kidConsent", "notify", "taskRun", "mailSent", "mailFail", "chat"];
 
 let secCache = { at: 0, v: {} };
 async function withSecrets(env) {
@@ -603,6 +652,7 @@ async function adminApi(req, env, ctx, url, raw) {
       if (n === "FIREBASE_SERVICE_ACCOUNT") {
         try { const o = JSON.parse(v); if (!o.client_email || !o.private_key || !o.project_id) throw 0; v = JSON.stringify(o); } catch { return json({ error: "서비스 계정 JSON 파일 내용 전체를 붙여넣어 주세요" }, 400); }
       }
+      if (n === "MODEL_URL") { v = v.replace(/\/+$/, ""); if (!/^https:\/\/[^\s]{4,300}$/.test(v)) return json({ error: "https://로 시작하는 주소를 넣어 주세요" }, 400); }
       if (!v || v.length > (n === "FIREBASE_SERVICE_ACCOUNT" ? 8000 : 500)) return json({ error: "값을 확인해 주세요" }, 400);
       await env.ADMIN_KV.put("secret:" + n, v);
       if (n === "FIREBASE_SERVICE_ACCOUNT") gTok.exp = 0;
@@ -639,6 +689,7 @@ export default {
       if (p === "/api/me") return req.method === "GET" ? await me(req, env, url) : json({ error: "GET만 돼요" }, 405);
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
+      if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/notify") return req.method === "POST" ? (bump(env, ctx, "notify"), await notify(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (req.method !== "GET") return json({ error: "GET만 돼요" }, 405);
       if (p === "/api/config") {
@@ -649,6 +700,7 @@ export default {
           mail: !!env.RESEND_API_KEY,
           tasks: !!(saOf(env) && env.RESEND_API_KEY),
           wiki: true,
+          model: !!(env.MODEL_URL && env.MODEL_KEY),
         });
       }
       if (p === "/api/wiki") {
