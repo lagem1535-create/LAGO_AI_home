@@ -106,6 +106,11 @@ async function chat(req, env, url, ctx) {
   bump(env, ctx, "chat");
   const task = ["ask", "agent", "translate", "summary"].includes(b.task) ? b.task : "ask";
   let refs = [], system = FACT_SYS, user = "", maxTok = 400;
+  // 앞 대화(최근 몇 줄)로 "어떤 처벌을 해?" 같은 짧은 후속 질문도 이해하게 해요
+  const hist = (Array.isArray(b.hist) ? b.hist : []).slice(-6).map((h) => ({ r: h && h.r === "a" ? "a" : "u", t: String((h && h.t) || "").replace(/\s+/g, " ").slice(0, 300) })).filter((h) => h.t);
+  const lastU = [...hist].reverse().find((h) => h.r === "u");
+  const sq = lastU && q.length <= 30 ? (lastU.t.slice(0, 120) + " " + q).slice(0, 500) : q;
+  const histTxt = hist.length ? "이전 대화:\n" + hist.map((h) => (h.r === "u" ? "사용자: " : "LAGO: ") + h.t).join("\n") + "\n\n" : "";
   if (task === "ask") {
     // 1순위: Kaggle 서버의 검색 DB(위키·뉴스·법령·판례…)로 답하기 (/ask). 없거나 아직 올리는 중이면 아래 위키백과 방식으로 대신해요.
     const ac0 = new AbortController();
@@ -114,7 +119,7 @@ async function chat(req, env, url, ctx) {
       const r0 = await fetch(env.MODEL_URL + "/ask", {
         method: "POST", signal: ac0.signal,
         headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
-        body: JSON.stringify({ q, max_new_tokens: maxTok }),
+        body: JSON.stringify({ q, sq, hist_txt: histTxt, max_new_tokens: maxTok }),
       });
       if (r0.ok) {
         const d0 = await r0.json();
@@ -132,9 +137,9 @@ async function chat(req, env, url, ctx) {
       }
     } catch (e) { /* 모델 서버 연결 문제는 아래 /generate 에서 다시 확인해요 */ }
     finally { clearTimeout(t0); }
-    try { refs = (await wiki(q)).results || []; } catch {}
+    try { refs = (await wiki(sq)).results || []; } catch {}
     const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
-    user = `참고자료:\n${ctxText}\n\n질문: ${q}`;
+    user = `참고자료:\n${ctxText}\n\n${histTxt}질문: ${q}`;
   } else if (task === "agent") {
     const ag = b.agent || {};
     const nm = String(ag.name || "에이전트").slice(0, 40), ins = String(ag.instructions || "").slice(0, 1500);

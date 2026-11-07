@@ -247,12 +247,12 @@ const modelNote='<p class="muted" style="margin:8px 0 0;font-size:12.5px">Fonte 
 async function agentLive(text,ag){const r=await modelCall({task:"agent",q:text,agent:{name:ag.name,instructions:ag.ins||ag.desc||""}});
 if(r.ok&&r.d.answer)return{html:`<span class="status">${ic(ag.ic||"bot",14)} ${esc(ag.name)} 에이전트</span><p class="answer">${esc(r.d.answer).replace(/\n/g,"<br>")}</p>${modelNote}`,plain:r.d.answer,meta:ag.name};
 if(r.status===429||r.status===403)return{html:`<p class="answer">${esc(r.d.error||"지금은 답할 수 없어요")}</p>`,plain:r.d.error||"",meta:ag.name};return null;}
-async function liveAnswer(q){try{
+async function liveAnswer(q,hist){try{
 if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const m=q.match(/(\d{1,2})\s*월/),y=q.match(/(20\d{2})\s*년/);const now=new Date();const yy=y?y[1]:now.getFullYear(),mm=m?m[1]:now.getMonth()+1;
 const r=await fetch(`/api/holidays?year=${yy}&month=${mm}`);const d=await r.json();if(!r.ok)throw 0;
 const list=d.items.length?`<ul style="margin:6px 0 0;padding-left:20px">${d.items.map(i=>`<li>${i.date.slice(4,6)*1}월 ${i.date.slice(6)*1}일 · ${esc(i.name)}</li>`).join("")}</ul>`:"<br>이 달에는 공휴일이 없어요.";
 return{html:`<span class="status">${ic("globe",14)} 공공데이터 1개 찾음</span><p class="answer">${yy}년 ${mm}월 공휴일이에요 <span class="cite">[1]</span>.${list}</p><div class="srcs">${srcCard(1,"한국천문연구원 특일 정보","공공데이터포털 · data.go.kr","https://www.data.go.kr")}</div>`,plain:`${yy}년 ${mm}월 공휴일 ${d.items.length}개`,meta:modeOf(S.mode).lab+" · 공공데이터"};}
-if(S.api.model&&S.mode==="Fonte"&&S.fb&&S.fb.auth.currentUser){try{const tok=await S.fb.auth.currentUser.getIdToken();const cr=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify({q})});const cd=await cr.json();
+if(S.api.model&&S.mode==="Fonte"&&S.fb&&S.fb.auth.currentUser){try{const tok=await S.fb.auth.currentUser.getIdToken();const cr=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify({q,hist})});const cd=await cr.json();
 if(cr.ok&&cd.answer){const body=esc(cd.answer).replace(/\[(\d)\]/g,'<span class="cite">[$1]</span>').replace(/\n/g,"<br>");return{html:`<span class="status">${ic("globe",14)} ${cd.viaDb?`자료 ${cd.refs}개 찾음${cd.dbs&&cd.dbs.length?" ("+esc(cd.dbs.join("·"))+")":""}`:`위키백과 ${cd.refs}개 찾음`} · Fonte가 답했어요</span><p class="answer">${body}</p>${cd.sources.length?`<div class="srcs">${cd.sources.map(x=>srcCard(x.n,x.title||x.db,cd.viaDb?[x.db,x.publisher,x.date].filter(Boolean).join(" · "):"위키백과 · ko.wikipedia.org",x.url)).join("")}</div>`:""}`,plain:cd.answer,meta:modeOf(S.mode).lab+(cd.viaDb?" · 검색 DB":" · 위키백과")};}
 if(cr.status===429||cr.status===403)return{html:`<p class="answer">${esc(cd.error||"지금은 답할 수 없어요")}</p>`,plain:cd.error||"",meta:modeOf(S.mode).lab};}catch(e){}}
 const r=await fetch("/api/wiki?q="+encodeURIComponent(q));const d=await r.json();if(!r.ok||!d.found)return null;
@@ -264,7 +264,7 @@ let c=(route()==="chat"||route()==="code-chat")?curChat():null;
 if(!c){c={id:"c"+Date.now(),area:S.area,title:text.slice(0,24),msgs:[],temp:S.temp,created:Date.now(),kid:S.goccia,agent:route()==="agent"?S.curAgent:null};S.chats.unshift(c);S.cur=c.id;}
 c.msgs.push({role:"user",text});const am={id:"m"+Date.now(),role:"assistant",loading:true};c.msgs.push(am);S.menu=false;save();
 go(code?"code-chat":"chat");const useLive=!code&&S.api&&!c.agent&&!(opt&&opt.tool)&&!(S.goccia&&(S.study||S.kStudy===true||/죽고싶|자해|괴롭힘|때려|학대|무서워/.test(text.replace(/\s/g,""))));
-setTimeout(async()=>{const a=(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||text,opt.opt,opt.file):null)||(useLive&&await liveAnswer(text))||(!code&&c.agent&&modelOn()&&await agentLive(text,agentById(c.agent)))||(code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},900);}
+setTimeout(async()=>{const a=(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||text,opt.opt,opt.file):null)||(useLive&&await liveAnswer(text,c.msgs.slice(0,-2).filter(m=>!m.loading&&(m.role==="user"?m.text:m.plain)).slice(-4).map(m=>({r:m.role==="user"?"u":"a",t:String(m.role==="user"?m.text:m.plain).slice(0,300)}))))||(!code&&c.agent&&modelOn()&&await agentLive(text,agentById(c.agent)))||(code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},900);}
 
 /* ---------- projects ---------- */
 function vProjects(){return shell(`${topbar("",`<button class="btn pri sm tbnew" data-act="newproj" tabindex="-1">${ic("plus",15)} 새 프로젝트</button>`)}<div class="scroll"><div class="wrap page" style="max-width:1080px">
