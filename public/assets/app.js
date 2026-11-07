@@ -241,6 +241,12 @@ function fbSave(now){if(!S.fb||!S.user||!S.user.uid)return;syncTasks();clearTime
 const fbMsg=e=>({"auth/user-disabled":"이용이 정지된 계정이에요. 문의가 필요하면 관리자에게 연락해 주세요.","auth/invalid-credential":"이메일이나 비밀번호가 맞지 않아요.","auth/wrong-password":"비밀번호가 맞지 않아요.","auth/user-not-found":"가입된 이메일이 아니에요. 회원가입을 먼저 해 주세요.","auth/email-already-in-use":"이미 가입된 이메일이에요. 로그인해 주세요.","auth/weak-password":"비밀번호가 너무 약해요. 영문과 숫자를 섞어 8자 이상으로 해 주세요.","auth/too-many-requests":"시도가 너무 많아요. 잠시 뒤에 다시 해 주세요.","auth/popup-closed-by-user":"Google 창이 닫혔어요.","auth/cancelled-popup-request":"Google 창이 닫혔어요.","auth/unauthorized-domain":"이 주소가 Firebase 승인된 도메인에 없어요. Authentication → 설정 → 승인된 도메인에 추가해 주세요.","auth/network-request-failed":"인터넷 연결을 확인해 주세요.","auth/operation-not-allowed":"이 로그인 방법이 Firebase에서 꺼져 있어요.","auth/invalid-email":"이메일 주소를 확인해 주세요."}[e&&e.code]||"로그인하지 못했어요. ("+((e&&e.code)||"알 수 없음")+")");
 async function loadApi(){if(!/^https?:$/.test(location.protocol))return;try{const r=await fetch("/api/config",{cache:"no-store"});if(!r.ok)return;const c=await r.json();if(c&&c.wiki){S.api=c;if(c.firebase&&!c.firebase.error&&c.firebase.apiKey)initFirebase(c.firebase);if(S.user)render();}}catch(e){}}
 const srcCard=(n,title,host,url)=>`<a class="src" href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span class="n">${n}</span><span class="grow"><b style="font-weight:500">${esc(title)}</b><br><span class="muted" style="font-size:11.5px">${esc(host)}</span></span>${ic("ext",14)}</a>`;
+const modelOn=()=>!!(S.api&&S.api.model&&S.fb&&S.fb.auth.currentUser&&!S.goccia);
+async function modelCall(p){try{const tok=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify(p)});const d=await r.json().catch(()=>({}));return{ok:r.ok,status:r.status,d};}catch(e){return{ok:false,status:0,d:{}};}}
+const modelNote='<p class="muted" style="margin:8px 0 0;font-size:12.5px">Fonte 모델이 답했어요. 이 작업은 따로 학습하지 않아서 틀릴 수 있으니 중요한 내용은 확인해 주세요.</p>';
+async function agentLive(text,ag){const r=await modelCall({task:"agent",q:text,agent:{name:ag.name,instructions:ag.ins||ag.desc||""}});
+if(r.ok&&r.d.answer)return{html:`<span class="status">${ic(ag.ic||"bot",14)} ${esc(ag.name)} 에이전트</span><p class="answer">${esc(r.d.answer).replace(/\n/g,"<br>")}</p>${modelNote}`,plain:r.d.answer,meta:ag.name};
+if(r.status===429||r.status===403)return{html:`<p class="answer">${esc(r.d.error||"지금은 답할 수 없어요")}</p>`,plain:r.d.error||"",meta:ag.name};return null;}
 async function liveAnswer(q){try{
 if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const m=q.match(/(\d{1,2})\s*월/),y=q.match(/(20\d{2})\s*년/);const now=new Date();const yy=y?y[1]:now.getFullYear(),mm=m?m[1]:now.getMonth()+1;
 const r=await fetch(`/api/holidays?year=${yy}&month=${mm}`);const d=await r.json();if(!r.ok)throw 0;
@@ -258,7 +264,7 @@ let c=(route()==="chat"||route()==="code-chat")?curChat():null;
 if(!c){c={id:"c"+Date.now(),area:S.area,title:text.slice(0,24),msgs:[],temp:S.temp,created:Date.now(),kid:S.goccia,agent:route()==="agent"?S.curAgent:null};S.chats.unshift(c);S.cur=c.id;}
 c.msgs.push({role:"user",text});const am={id:"m"+Date.now(),role:"assistant",loading:true};c.msgs.push(am);S.menu=false;save();
 go(code?"code-chat":"chat");const useLive=!code&&S.api&&!c.agent&&!(opt&&opt.tool)&&!(S.goccia&&(S.study||S.kStudy===true||/죽고싶|자해|괴롭힘|때려|학대|무서워/.test(text.replace(/\s/g,""))));
-setTimeout(async()=>{const a=(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||text,opt.opt,opt.file):null)||(useLive&&await liveAnswer(text))||(code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},900);}
+setTimeout(async()=>{const a=(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||text,opt.opt,opt.file):null)||(useLive&&await liveAnswer(text))||(!code&&c.agent&&modelOn()&&await agentLive(text,agentById(c.agent)))||(code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},900);}
 
 /* ---------- projects ---------- */
 function vProjects(){return shell(`${topbar("",`<button class="btn pri sm tbnew" data-act="newproj" tabindex="-1">${ic("plus",15)} 새 프로젝트</button>`)}<div class="scroll"><div class="wrap page" style="max-width:1080px">
@@ -335,17 +341,20 @@ ${plan("Max","가장 많이, 가장 먼저","$50",[["Pro의 모든 기능",1],["
 function vTool(){const id=route().slice(5),t=TOOLS.find(x=>x.id===id);if(!t){go("home");return "";}const dr=S.toolIn||{};
 const LANG=["한국어","영어","일본어","중국어","스페인어"];
 let form="";
-if(id==="translate")form=`<div class="note">${ic("info",16)}<span>번역은 LAGO 모델이 연결되는 <b>베타</b> 때 열려요. 모델 없이 거짓 번역을 보여 드리지 않으려고 지금은 닫아 두었어요.</span></div>
+if(id==="translate"&&modelOn())form=`<div class="note">${ic("info",16)}<span>Fonte 모델이 번역해요. 번역을 따로 학습하지 않아서 틀릴 수 있어요. 한 번에 1,500자까지 처리해요.</span></div>
+<label class="fld">번역할 글<textarea id="ti" rows="6" placeholder="번역할 글을 붙여 넣어 주세요" maxlength="1500" style="resize:vertical">${esc(dr.text||"")}</textarea></label>
+<div class="row" style="gap:10px;flex-wrap:wrap"><label class="fld" style="flex:1;min-width:150px">어떤 언어로<select id="to">${LANG.map(l=>`<option ${(dr.opt||"영어")===l?"selected":""}>${l}</option>`).join("")}</select></label></div>`;
+else if(id==="translate")form=`<div class="note">${ic("info",16)}<span>번역은 LAGO 모델이 연결되는 <b>베타</b> 때 열려요. 모델 없이 거짓 번역을 보여 드리지 않으려고 지금은 닫아 두었어요.</span></div>
 <label class="fld">번역할 글<textarea id="ti" rows="6" placeholder="베타 때 여기에 붙여 넣어요" maxlength="4000" style="resize:vertical" disabled>${esc(dr.text||"")}</textarea></label>
 <div class="row" style="gap:10px;flex-wrap:wrap"><label class="fld" style="flex:1;min-width:150px">어떤 언어로<select id="to" disabled>${LANG.map(l=>`<option>${l}</option>`).join("")}</select></label></div>`;
 if(id==="extract")form=`<label class="fld">파일 올리기<input id="tf2" type="file" accept=".pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.srt,.log,image/*"></label>
 <p class="muted" style="font-size:12.5px;margin:0">PDF · Word(DOCX) · 텍스트 파일은 바로 글자를 뽑아요. 사진·스캔 이미지는 글자 인식(OCR)을 쓰는데, 처음에는 언어 파일을 받느라 1~2분 걸릴 수 있어요. 파일은 이 브라우저에서만 읽고 서버로 보내지 않아요. 파일 크기는 15MB까지예요.</p>`;
 if(id==="summary")form=`<label class="fld">요약할 글<textarea id="ti" rows="8" placeholder="요약할 글을 붙여 넣어 주세요" maxlength="30000" style="resize:vertical">${esc(dr.text||"")}</textarea></label>
 <div class="row" style="gap:10px;flex-wrap:wrap"><label class="fld" style="flex:1;min-width:150px">길이<select id="to">${["3줄","5줄","한 문단"].map(l=>`<option ${(dr.opt||"3줄")===l?"selected":""}>${l}</option>`).join("")}</select></label><label class="fld" style="flex:2;min-width:200px">또는 파일 올리기<input id="tf2" type="file" accept=".pdf,.docx,.txt,.md,.html,.htm,.srt"></label></div>
-<p class="muted" style="font-size:12.5px;margin:0">글에서 중요한 문장을 골라 보여 줘요(말을 새로 만들지 않아요). 문장을 새로 써 주는 AI 요약은 모델이 연결되는 베타 때 열려요.</p>`;
+<p class="muted" style="font-size:12.5px;margin:0">글에서 중요한 문장을 골라 보여 줘요(말을 새로 만들지 않아요). ${modelOn()?"모델이 연결돼 있어서 AI 요약으로 써 줘요(3,000자까지, 파일은 글자만 뽑아 요약해요).":"문장을 새로 써 주는 AI 요약은 모델이 연결되는 베타 때 열려요."}</p>`;
 return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:760px;display:grid;gap:16px">
-<div class="row" style="gap:12px"><span class="svcico" style="background:${t.c}">${ic(t.ic,20)}</span><div class="grow"><h1 style="margin:0">${t.lab}</h1><span class="muted" style="font-size:13.5px">${t.d}</span></div><button class="btn sm" data-pintool="${t.id}">${ic("pin",14)} ${S.pinTools.includes(t.id)?"고정 해제":"사이드바에 고정"}</button></div>
-<form id="toolForm" class="card" style="display:grid;gap:14px" novalidate data-tool="${t.id}">${form}<p class="err" id="toolerr" role="alert"></p><div class="row" style="justify-content:flex-end"><button class="btn pri" ${id==="translate"?"disabled":""}>${id==="translate"?"베타 때 열려요":id==="extract"?"글자 뽑기":"요약하기"}</button></div></form>
+<div class="row" style="gap:12px"><span class="svcico" style="background:${t.c}">${ic(t.ic,20)}</span><div class="grow"><h1 style="margin:0">${t.lab}</h1><span class="muted" style="font-size:13.5px">${id==="translate"&&modelOn()?"원하는 언어로 번역해요 (Fonte 모델).":t.d}</span></div><button class="btn sm" data-pintool="${t.id}">${ic("pin",14)} ${S.pinTools.includes(t.id)?"고정 해제":"사이드바에 고정"}</button></div>
+<form id="toolForm" class="card" style="display:grid;gap:14px" novalidate data-tool="${t.id}">${form}<p class="err" id="toolerr" role="alert"></p><div class="row" style="justify-content:flex-end"><button class="btn pri" ${id==="translate"&&!modelOn()?"disabled":""}>${id==="translate"?(modelOn()?"번역하기":"베타 때 열려요"):id==="extract"?"글자 뽑기":"요약하기"}</button></div></form>
 <div class="card" style="display:grid;gap:8px"><b style="font-size:14px">이렇게 써요</b><ol style="margin:0;padding-left:20px;display:grid;gap:6px;font-size:13.5px;color:var(--ink2)">${t.steps.map(x=>`<li>${x}</li>`).join("")}</ol></div></div></div>`);}
 /* ---------- 글자 뽑기 · 핵심 문장 요약 (모델 없이 이 브라우저에서 해요) ---------- */
 const unent=x=>x.replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n)).replace(/&amp;/g,"&");
@@ -383,6 +392,9 @@ if(file){const r=await readFileText(file);body=r.text;how=r.how;}
 if(!body||!body.trim())return{html:`<span class="status">${ic(t.ic,14)} ${t.lab}</span><p class="answer">${file?"파일에서 글자를 찾지 못했어요. 글자가 없는 스캔 파일이거나 사진이 흐릴 수 있어요. 사진은 ‘이미지’로 올리면 글자 인식(OCR)을 해요.":"글이 비어 있어요."}</p>`,plain:"글자 없음",meta:t.lab};
 if(kind==="extract"){const full=body.length>12000?body.slice(0,12000):body;
 return{html:`<span class="status">${ic(t.ic,14)} ${t.lab} · ${esc(how)} · ${body.length.toLocaleString()}자</span><p class="answer">${esc(file.name)}에서 글자를 뽑았어요.</p><pre class="toolout" style="white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:13px/1.65 var(--sans,inherit);margin:6px 0 0">${esc(full)}</pre>${body.length>12000?`<p class="muted" style="font-size:12.5px;margin:6px 0 0">길어서 앞 12,000자만 보여 드려요.</p>`:""}`,plain:full,meta:t.lab};}
+if(kind==="translate"||(kind==="summary"&&modelOn())){const mr=await modelCall(kind==="translate"?{task:"translate",text:body,lang:opt}:{task:"summary",text:body,len:opt});
+ if(mr.ok&&mr.d.answer){const cut=body.length>(kind==="translate"?1500:3000);return{html:`<span class="status">${ic(t.ic,14)} ${t.lab} · ${esc(opt)}${how?" · "+esc(how):""}</span><p class="answer">${esc(mr.d.answer).replace(/\n/g,"<br>")}</p>${cut?`<p class="muted" style="margin:8px 0 0;font-size:12.5px">길어서 앞 ${kind==="translate"?"1,500":"3,000"}자만 처리했어요.</p>`:""}${modelNote}`,plain:mr.d.answer,meta:t.lab};}
+ if(kind==="translate")return{html:`<span class="status">${ic(t.ic,14)} ${t.lab}</span><p class="answer">${esc((mr.d&&mr.d.error)||"모델 서버에 연결하지 못했어요. 잠시 뒤에 다시 해 주세요.")}</p>`,plain:"번역 실패",meta:t.lab};}
 const n=opt==="5줄"?5:opt==="한 문단"?4:3;const r=summarize(body,n);
 if(!r.pick.length)return{html:`<span class="status">${ic(t.ic,14)} ${t.lab}</span><p class="answer">요약할 만한 문장을 찾지 못했어요. 글이 너무 짧아요.</p>`,plain:"요약 없음",meta:t.lab};
 const lines=opt==="한 문단"?`<p class="answer">${esc(r.pick.map(p=>p.x).join(" "))}</p>`:`<ol style="margin:6px 0 0;padding-left:22px;display:grid;gap:8px">${r.pick.map(p=>`<li class="answer">${esc(p.x)} <span class="cite" title="원문 ${p.i+1}번째 문장">[원문 ${p.i+1}]</span></li>`).join("")}</ol>`;
@@ -651,11 +663,11 @@ if(f.id==="joinForm"){const n=$("#jn").value.trim(),em=$("#je").value.trim().toL
  store.set("lago_data_"+em,{chats:[],learn:$("#jl").checked,learnImg:$("#jl").checked});
  S.pendingVerify=em;go("verify");return;}
 if(f.id==="toolForm"){const k=f.dataset.tool,raw=($("#ti")?$("#ti").value.trim():""),op=$("#to")?$("#to").value:"",fl=$("#tf2")&&$("#tf2").files&&$("#tf2").files[0],err=$("#toolerr");
- if(k==="translate"){err.textContent="번역은 모델이 연결되는 베타 때 열려요.";return;}
+ if(k==="translate"&&!modelOn()){err.textContent="번역은 모델이 연결되는 베타 때 열려요.";return;}
  if(!raw&&!fl){err.textContent=k==="extract"?"파일을 올려 주세요.":"글을 붙여 넣거나 파일을 올려 주세요.";return;}
  if(fl&&fl.size>15*1024*1024){err.textContent="파일이 너무 커요. 15MB 이하로 올려 주세요.";return;}
  err.textContent="";S.toolIn={text:raw,opt:op};const lab=TOOLS.find(x=>x.id===k).lab;const nm=fl?fl.name:raw.slice(0,16);
- const q=k==="extract"?`이 파일에서 글자를 뽑아 줘: ${fl.name}`:`${op}로 요약해 줘: ${fl?fl.name:raw.slice(0,60)}`;
+ const q=k==="extract"?`이 파일에서 글자를 뽑아 줘: ${fl.name}`:k==="translate"?`${op}로 번역해 줘: ${raw.slice(0,60)}`:`${op}로 요약해 줘: ${fl?fl.name:raw.slice(0,60)}`;
  S.area="talk";S.cur=null;S.temp=false;send(q,{tool:k,raw:fl?fl.name:raw,opt:op,file:fl||null});if(S.chats[0])S.chats[0].title=lab+" · "+nm;save();return;}
 if(f.id==="mcpForm"){const u=$("#mu").value.trim(),err=$("#merr");if(!/^https:\/\/[^\s/]+\.[^\s]+$/.test(u)){err.textContent="https://로 시작하는 서버 주소를 넣어 주세요.";return;}if(cust().some(x=>x.url===u)){err.textContent="이미 추가한 주소예요.";return;}const nm=$("#mn").value.trim()||u.replace(/^https:\/\//,"").split("/")[0];S.customMcp=[...cust(),{name:nm,url:u}];save();render();toast("커넥터를 추가했어요 (예시)");return;}
 if(f.id==="taskForm"){const n=$("#tn").value.trim(),pr=$("#tp").value.trim(),err=$("#terr");if(!n){err.textContent="이름을 입력해 주세요.";$("#tn").focus();return;}if(!pr){err.textContent="시킬 말을 입력해 주세요.";$("#tp").focus();return;}

@@ -96,7 +96,7 @@ async function chat(req, env, url, ctx) {
   }
   let b = {}; try { b = await req.json(); } catch {}
   const q = String(b.q || "").trim().slice(0, 500);
-  if (!q) return json({ error: "질문을 적어 주세요" }, 400);
+  if (!q && (b.task === undefined || b.task === "ask" || b.task === "agent")) return json({ error: "질문을 적어 주세요" }, 400);
   if (env.ADMIN_KV && !isAdmin) {
     const k = `chat:${u.localId}:${day()}`;
     const n = parseInt((await env.ADMIN_KV.get(k)) || "0", 10);
@@ -104,24 +104,45 @@ async function chat(req, env, url, ctx) {
     await env.ADMIN_KV.put(k, String(n + 1), { expirationTtl: 172800 });
   }
   bump(env, ctx, "chat");
-  let refs = [];
-  try { refs = (await wiki(q)).results || []; } catch {}
-  const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(없음)";
-  const user = `참고자료:\n${ctxText}\n\n질문: ${q}`;
+  const task = ["ask", "agent", "translate", "summary"].includes(b.task) ? b.task : "ask";
+  let refs = [], system = FACT_SYS, user = "", maxTok = 400;
+  if (task === "ask") {
+    try { refs = (await wiki(q)).results || []; } catch {}
+    const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(없음)";
+    user = `참고자료:\n${ctxText}\n\n질문: ${q}`;
+  } else if (task === "agent") {
+    const ag = b.agent || {};
+    const nm = String(ag.name || "에이전트").slice(0, 40), ins = String(ag.instructions || "").slice(0, 1500);
+    if (!ins) return json({ error: "에이전트 지시문이 비어 있어요" }, 400);
+    system = `너는 LAGO AI의 '${nm}' 에이전트다. 아래 지시를 따라 한국어로 짧고 정확하게 답하라. 모르는 것은 모른다고 말하라. URL을 직접 쓰지 마라.\n지시: ${ins}`;
+    user = q;
+  } else {
+    const text = String(b.text || "").trim().slice(0, task === "translate" ? 1500 : 3000);
+    if (!text) return json({ error: "글이 비어 있어요" }, 400);
+    if (task === "translate") {
+      const lang = ["한국어", "영어", "일본어", "중국어", "스페인어"].includes(b.lang) ? b.lang : "영어";
+      system = `너는 번역가다. 주어진 글을 ${lang}로 자연스럽게 번역하라. 번역문만 출력하고 설명이나 덧붙임은 쓰지 마라. 원문에 없는 내용은 추가하지 마라.`;
+      user = text; maxTok = 600;
+    } else {
+      const len = ["3줄", "5줄", "한 문단"].includes(b.len) ? b.len : "3줄";
+      system = `너는 요약가다. 주어진 글의 내용만 한국어로 ${len === "한 문단" ? "한 문단" : len}로 요약하라. 글에 없는 내용은 절대 추가하지 마라.`;
+      user = text; maxTok = 400;
+    }
+  }
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 90000);
   try {
     const r = await fetch(env.MODEL_URL + "/generate", {
       method: "POST", signal: ac.signal,
       headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
-      body: JSON.stringify({ system: FACT_SYS, user, max_new_tokens: 400 }),
+      body: JSON.stringify({ system, user, max_new_tokens: maxTok }),
     });
     if (!r.ok) return json({ error: "모델이 응답하지 못했어요 (" + r.status + ")", modelDown: true }, 502);
     const d = await r.json();
     let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return json({ answer: ans, sources: cited.map((n) => ({ n, title: refs[n - 1].title, url: refs[n - 1].url })), refs: refs.length });
+    return json({ answer: ans, task, sources: cited.map((n) => ({ n, title: refs[n - 1].title, url: refs[n - 1].url })), refs: refs.length });
   } catch (e) {
     return json({ error: "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
   } finally { clearTimeout(t); }
