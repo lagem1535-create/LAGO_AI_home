@@ -505,8 +505,6 @@ input[type=file]::file-selector-button:hover{background:#DCE6FF}
 a.btn{text-decoration:none}
 
 /* ===== 담백한 마감: 색은 그대로, 번쩍이는 그라데이션·빛 번짐·AI 티 나는 장식만 뺌. 제목은 세리프 ===== */
-:root{--serif:"Newsreader","Noto Serif KR","Apple SD Gothic Neo",Georgia,serif}
-h1,h2,.serif{font-family:var(--serif);font-weight:500;letter-spacing:-.01em}
 h1{font-size:30px;line-height:1.2}
 .btn.pri,.up{background:var(--blue);color:#fff;border:0;box-shadow:none}
 .btn.pri:hover,.up:hover{background:var(--navy)}
