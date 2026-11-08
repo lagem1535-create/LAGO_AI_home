@@ -264,6 +264,64 @@ async function shareTools(req, env, url, ctx, p) {
   return json({ error: "없는 경로예요" }, 404);
 }
 
+
+// ---------- 뉴스 (언론사 RSS를 질문 올 때 바로 읽어요. 키·DB 필요 없음) ----------
+// 주소는 lago_ai_db/collect_news.py 의 FEEDS 와 같은 곳이에요.
+const NEWS_RE = /뉴스|속보|소식|기사|헤드라인/;
+const NEWS_STOP = /^(뉴스|속보|소식|기사|헤드라인|알려|알려줘|알려주세요|알려줄래|보여줘|오늘|오늘의|오늘은|최근|요즘|지금|현재|좀|줘|해줘|뭐야|뭐|있어|있나|어때|무슨|주요|관련|대한|에서|있는)$/;
+const NEWS_FEEDS = [
+  ["BBC 코리아", "https://feeds.bbci.co.uk/korean/rss.xml"],
+  ["경향신문", "https://www.khan.co.kr/rss/rssdata/total_news.xml"],
+  ["동아일보", "https://rss.donga.com/total.xml"],
+  ["한겨레", "https://www.hani.co.kr/rss/"],
+  ["서울신문", "https://www.seoul.co.kr/xml/rss/rss_politics.xml"],
+  ["서울신문", "https://www.seoul.co.kr/xml/rss/rss_economy.xml"],
+  ["서울신문", "https://www.seoul.co.kr/xml/rss/rss_society.xml"],
+  ["뉴시스", "https://newsis.com/RSS/society.xml"],
+  ["뉴시스", "https://newsis.com/RSS/economy.xml"],
+];
+const xmlText = (t) => String(t || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")
+  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'")
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+function parseFeed(xml, pub) {
+  const out = [];
+  const blocks = String(xml || "").match(/<(item|entry)[\s>][\s\S]*?<\/\1>/gi) || [];
+  for (const b of blocks.slice(0, 40)) {
+    const g = (n) => { const m = b.match(new RegExp("<" + n + "[^>]*>([\\s\\S]*?)</" + n + ">", "i")); return m ? m[1] : ""; };
+    const title = xmlText(g("title"));
+    let link = xmlText(g("link")); if (!link) { const m = b.match(/<link[^>]*href=["']([^"']+)["']/i); link = m ? m[1] : ""; }
+    const sum = xmlText(g("description") || g("summary") || g("content:encoded")).slice(0, 300);
+    const ts = Date.parse(xmlText(g("pubDate") || g("dc:date") || g("published") || g("updated"))) || 0;
+    if (title) out.push({ title: title.slice(0, 150), extract: sum && sum !== title ? sum : "", url: /^https?:\/\//.test(link) ? link.slice(0, 300) : "", publisher: pub, ts, db: "뉴스" });
+  }
+  return out;
+}
+function newsTokens(q) {
+  return String(q).replace(/[?？!.,~"'`]/g, " ").split(/\s+/).map((w) => w.replace(/(은|는|이|가|을|를|의|에|도|만|와|과)$/, "")).filter((w) => w.length >= 2 && !NEWS_STOP.test(w));
+}
+async function newsRefs(q) {
+  const all = (await Promise.all(NEWS_FEEDS.map(async ([pub, u]) => {
+    try {
+      const r = await fetch(u, { headers: { "user-agent": "Mozilla/5.0 (LAGO-AI news)", accept: "application/rss+xml, application/xml, text/xml, */*" }, cf: { cacheTtl: 600, cacheEverything: true } });
+      return r.ok ? parseFeed(await r.text(), pub) : [];
+    } catch { return []; }
+  }))).flat();
+  const seen = new Set();
+  const uniq = all.filter((x) => { const k = x.title.replace(/\s/g, "").slice(0, 30); if (seen.has(k)) return false; seen.add(k); return true; });
+  const toks = newsTokens(q);
+  let pick;
+  if (toks.length) {
+    pick = uniq.map((x) => ({ x, sc: toks.reduce((a, w) => a + (x.title.includes(w) ? 2 : 0) + (x.extract.includes(w) ? 1 : 0), 0) }))
+      .filter((o) => o.sc > 0).sort((a, b) => b.sc - a.sc || b.x.ts - a.x.ts).slice(0, 6).map((o) => o.x);
+  } else {
+    // 주제가 없으면 언론사별로 골고루 최신 기사
+    const by = {}; for (const x of uniq.sort((a, b) => b.ts - a.ts)) (by[x.publisher] = by[x.publisher] || []).push(x);
+    pick = []; for (let i = 0; i < 2; i++) for (const k of Object.keys(by)) if (by[k][i] && pick.length < 6) pick.push(by[k][i]);
+    pick.sort((a, b) => b.ts - a.ts);
+  }
+  const kst = (ts) => (ts ? new Date(ts + 9 * 3600e3).toISOString().slice(0, 10) : "");
+  return pick.map((x) => ({ ...x, date: kst(x.ts), extract: `${x.publisher} ${kst(x.ts)} — ${x.title}${x.extract ? ". " + x.extract : ""}` }));
+}
 async function chat(req, env, url, ctx) {
   const origin = req.headers.get("origin");
   if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);
@@ -371,7 +429,9 @@ async function chat(req, env, url, ctx) {
       }
     } catch (e) { /* 모델 서버 연결 문제는 아래 /generate 에서 다시 확인해요 */ }
     finally { clearTimeout(t0); }
-    try { refs = (await wiki(sq)).results || []; } catch {}
+    let newsHit = false;
+    if (NEWS_RE.test(q)) { try { refs = await newsRefs(sq); newsHit = refs.length > 0; } catch {} }
+    if (!refs.length) { try { refs = (await wiki(sq)).results || []; } catch {} }
     if (ctxIn) refs.unshift({ title: "첨부한 글", extract: ctxIn, url: "", att: true });
     const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
     user = `참고자료:\n${ctxText}\n\n${histTxt.replace(/^첨부한 글:[\s\S]*?\n\n/, "")}질문: ${q}`;
@@ -414,7 +474,7 @@ async function chat(req, env, url, ctx) {
     let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : "위키백과", cited: cited.includes(i + 1) })), refs: refs.length });
+    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) });
   } catch (e) {
     return json({ error: lurl ? "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" : "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
   } finally { clearTimeout(t); }
