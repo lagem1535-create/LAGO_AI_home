@@ -435,11 +435,14 @@ async function chat(req, env, url, ctx) {
       }
     } catch (e) { /* 모델 서버 연결 문제는 아래 /generate 에서 다시 확인해요 */ }
     finally { clearTimeout(t0); }
-    if (NEWS_RE.test(q)) { try { refs = await newsRefs(sq); } catch {} }
+    let newsMode = false;
+    if (NEWS_RE.test(q)) { try { refs = (await newsRefs(sq)).slice(0, 4); newsMode = refs.length > 0; } catch {} }
     if (!refs.length) { try { refs = (await wiki(sq)).results || []; } catch {} }
     if (ctxIn) refs.unshift({ title: "첨부한 글", extract: ctxIn, url: "", att: true });
-    const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
-    user = `참고자료:\n${ctxText}\n\n${histTxt.replace(/^첨부한 글:[\s\S]*?\n\n/, "")}질문: ${q}`;
+    // 뉴스는 제목+요약을 짧게만 (태블릿은 읽는 시간이 길어서 90초 안에 끝나게)
+    const ctxText = refs.length ? refs.map((x, i) => newsMode ? `[${i + 1}] ${String(x.extract).slice(0, 190)}` : `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
+    user = `참고자료:\n${ctxText}\n\n${newsMode ? "" : histTxt.replace(/^첨부한 글:[\s\S]*?\n\n/, "")}질문: ${q}${newsMode ? "\n(자료의 기사만 근거로 3문장 이내로 짧게 답하라)" : ""}`;
+    if (newsMode) maxTok = 160;
   } else if (task === "agent") {
     const ag = b.agent || {};
     const nm = String(ag.name || "에이전트").slice(0, 40), ins = String(ag.instructions || "").slice(0, 1500);
@@ -464,7 +467,7 @@ async function chat(req, env, url, ctx) {
   try {
     let d;
     if (lurl) {
-      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? 300 : maxTok, ac.signal, okModel(b.model));
+      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? (maxTok < 300 ? maxTok : 300) : maxTok, ac.signal, okModel(b.model));
       if (lr.status) return json({ error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")", modelDown: true }, 502);
       d = lr;
     } else {
