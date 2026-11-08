@@ -153,6 +153,12 @@ async function shareTools(req, env, url, ctx, p) {
     if (!o) return json({ error: "공유가 끝났거나 없는 링크예요" }, 404);
     const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ title: d.title, name: d.name, msgs: d.msgs, at: d.at, upd: d.upd }, 200, { "x-robots-tag": "noindex" });
   }
+  m = p.match(/^\/api\/html\/([a-z0-9]{6,16})$/);
+  if (m && req.method === "GET") {
+    const o = env.ADMIN_KV && await env.ADMIN_KV.get("html:" + m[1]);
+    if (!o) return json({ error: "공개가 끝났거나 없는 페이지예요" }, 404);
+    const d = JSON.parse(o); return json({ title: d.title, code: d.code, owner: d.ownerName || "" }, 200, { "x-robots-tag": "noindex" });
+  }
   m = p.match(/^\/api\/tools\/([a-z0-9]{6,16})$/);
   if (m && req.method === "GET") {
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + m[1]);

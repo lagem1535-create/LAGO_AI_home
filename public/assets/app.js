@@ -45,15 +45,15 @@ const me=()=>S.goccia?{name:"지우",plan:"Goccia",email:"kid"}:S.user;
 const allAgents=()=>[...S.myAgents,...OFFICIAL];
 const agentById=id=>allAgents().find(a=>a.id===id);
 /* ---------- router ---------- */
-const ROUTES=["shared","tools","tool-new","tool-my","tool-pub","share-view","tool-translate","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin","admin-user"];
-const PUBLIC=["login","join","verify","kid","terms","share-view","tool-pub"];
+const ROUTES=["html-pub","shared","tools","tool-new","tool-my","tool-pub","share-view","tool-translate","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin","admin-user"];
+const PUBLIC=["html-pub","login","join","verify","kid","terms","share-view","tool-pub"];
 const PATHMODE=(()=>{const m=document.querySelector('meta[name="lago-router"]');return !!m&&m.content==="path"&&/^https?:$/.test(location.protocol)&&!!history.pushState;})();
 /* 주소: 서버에서는 /chat, /chat/<대화번호>, /admin/user 처럼 실제 경로를 써요. 미리보기(한 파일)에서는 #chat 처럼 #을 써요. */
 function urlFor(r){if(!PATHMODE)return"#"+r;if(r==="home")return"/";if((r==="chat"||r==="code-chat")&&S.cur)return"/"+r+"/"+encodeURIComponent(S.cur);if(r==="admin-user")return"/admin/user";if(r==="tool-my"&&S.curTool)return"/tool-my/"+encodeURIComponent(S.curTool);return"/"+r;}
 function route(){
 if(!PATHMODE){const h=location.hash.slice(1);return ROUTES.includes(h)?h:(S.user?"home":"login");}
 const seg=location.pathname.replace(/\/+$/,"").split("/").slice(1).map(decodeURIComponent);
-let r=seg[0]||"home";if(r==="admin"&&seg[1]==="user")r="admin-user";if(r==="s"){S.svId=seg[1]||"";r="share-view";}else if(r==="t"){S.tpId=seg[1]||"";r="tool-pub";}else if(r==="tool-my"&&seg[1])S.curTool=seg[1];
+let r=seg[0]||"home";if(r==="admin"&&seg[1]==="user")r="admin-user";if(r==="s"){S.svId=seg[1]||"";r="share-view";}else if(r==="t"){S.tpId=seg[1]||"";r="tool-pub";}else if(r==="h"){S.hpId=seg[1]||"";r="html-pub";}else if(r==="tool-my"&&seg[1])S.curTool=seg[1];
 if(!ROUTES.includes(r))return S.user?"home":"login";
 if((r==="chat"||r==="code-chat")&&seg[1])S.cur=seg[1];
 return r;}
@@ -247,11 +247,12 @@ S.fb.auth.onAuthStateChanged(async u=>{
  if(!snap_exists(d)&&!S.signingUp)fbSave(true);
  if(S.unsub)S.unsub();S.unsub=S.fb.db.doc("users/"+u.uid+"/data/main").onSnapshot(sn=>{if(!sn.exists||sn.metadata.hasPendingWrites||fbT)return;const x=sn.data();const before=pendingReq();let ch=false;PKEYS.forEach(k=>{if(x[k]!=null&&JSON.stringify(S[k])!==JSON.stringify(x[k])){S[k]=x[k];ch=true;}});if(ch){syncReq();render();if(!S.goccia&&pendingReq()>before)toast("지우가 시간을 더 요청했어요");}});
  S.booting=false;const r=route();if(["login","join","verify","kid"].includes(r)||!r){if(PATHMODE&&S.after&&S.after!=="/login"){const a=S.after;S.after=null;history.replaceState(null,"",a);render();}else go("home",true);}else render();meCheck();});
-}catch(e){bootDone();S.fbErr=true;toast("Firebase를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.");}}
+}catch(e){bootDone();S.fbErr=true;S.fbErrMsg=String((e&&(e.code||e.message))||"").slice(0,80)||(e&&e.type==="error"?"스크립트 로드 실패":"");render();toast("Firebase를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.");}}
 const snap_exists=d=>d&&Object.keys(d).length>0;
 let fbT=null;
 function fbSave(now){if(!S.fb||!S.user||!S.user.uid)return;syncTasks();clearTimeout(fbT);const run=()=>{fbT=0;const data=JSON.parse(JSON.stringify({name:S.user.name,plan:S.user.planBase||S.user.plan||"Free",myAgents:S.myAgents,favs:S.favs,pinned:S.pinned,chats:slimChats(S.chats.filter(c=>!c.temp&&!c.kid),700000),learn:S.learn,learnImg:S.learnImg,mode:S.mode,think:S.think,...pk(),updated:Date.now()}));S.fb.db.doc("users/"+S.user.uid+"/data/main").set(data).catch(()=>toast("저장하지 못했어요. 인터넷이나 Firestore 규칙을 확인해 주세요."));};now?run():fbT=setTimeout(run,800);}
-function fbDiag(){if(!PATHMODE)return "";let m="";if(S.fbErr)m="Firebase 라이브러리를 불러오지 못했어요. 인터넷이나 광고 차단 설정을 확인하고 새로고침해 주세요.";else if(!S.apiTried)m="";else if(!S.api)m="서버(/api/config)에 연결하지 못했어요. 잠시 뒤 새로고침해 주세요. 계속되면 Worker 배포가 실패했을 수 있어요.";else if(!S.api.firebase)m="서버에 Firebase 설정(FIREBASE_CONFIG)이 없어서 지금은 로그인할 수 없어요. 관리자가 Cloudflare Worker의 변수·비밀에 FIREBASE_CONFIG를 넣어야 해요.";else if(S.api.firebase.error)m=S.api.firebase.error;else if(!S.fb&&!S.booting)m="Firebase에 연결하는 중이에요…";return m?`<div class="note" role="alert" style="border-color:#F0B8B3">${ic("info",16)}<span>${esc(m)}</span></div>`:"";}
+function fbDiag(){if(!PATHMODE)return "";let m="";if(S.fbErr)m="Firebase를 불러오지 못했어요"+(S.fbErrMsg?" ("+S.fbErrMsg+")":"")+". 인터넷이나 광고 차단 설정을 확인하고 새로고침해 주세요. 계속되면 FIREBASE_CONFIG의 값(JSON 형식·apiKey)을 확인해 주세요.";else if(!S.apiTried)m="";else if(!S.api)m="서버(/api/config)에 연결하지 못했어요. 잠시 뒤 새로고침해 주세요. 계속되면 Worker 배포가 실패했을 수 있어요.";else if(!S.api.firebase)m="서버에 Firebase 설정(FIREBASE_CONFIG)이 없어서 지금은 로그인할 수 없어요. 관리자가 Cloudflare Worker의 변수·비밀에 FIREBASE_CONFIG를 넣어야 해요.";else if(S.api.firebase.error)m=S.api.firebase.error;else if(!S.fb&&!S.booting)m="Firebase에 연결하는 중이에요…";return m?`<div class="note" role="alert" style="border-color:#F0B8B3">${ic("info",16)}<span>${esc(m)}</span></div>`:"";}
+function fbBlock(){if(!(PATHMODE&&S.api&&S.api.firebase&&!S.api.firebase.error&&S.api.firebase.apiKey)||S.fb)return "";return S.fbErr?"Firebase에 연결하지 못했어요"+(S.fbErrMsg?" ("+S.fbErrMsg+")":"")+". 새로고침한 뒤 다시 해 주세요.":"Firebase에 연결하는 중이에요. 1~2초 뒤에 다시 눌러 주세요.";}
 const fbMsg=e=>({"auth/user-disabled":"이용이 정지된 계정이에요. 문의가 필요하면 관리자에게 연락해 주세요.","auth/invalid-credential":"이메일이나 비밀번호가 맞지 않아요.","auth/wrong-password":"비밀번호가 맞지 않아요.","auth/user-not-found":"이 이메일로 만든 비밀번호 계정이 없어요. Google로 가입했다면 위의 ‘Google로 계속하기’를 눌러 주세요. 처음이라면 회원가입을 해 주세요.","auth/email-already-in-use":"이미 가입된 이메일이에요. 로그인해 주세요.","auth/weak-password":"비밀번호가 너무 약해요. 영문과 숫자를 섞어 8자 이상으로 해 주세요.","auth/too-many-requests":"시도가 너무 많아요. 잠시 뒤에 다시 해 주세요.","auth/popup-closed-by-user":"Google 창이 닫혔어요.","auth/cancelled-popup-request":"Google 창이 닫혔어요.","auth/unauthorized-domain":"이 주소가 Firebase 승인된 도메인에 없어요. Authentication → 설정 → 승인된 도메인에 추가해 주세요.","auth/network-request-failed":"인터넷 연결을 확인해 주세요.","auth/operation-not-allowed":"이 로그인 방법이 Firebase에서 꺼져 있어요.","auth/invalid-email":"이메일 주소를 확인해 주세요."}[e&&e.code]||"로그인하지 못했어요. ("+((e&&e.code)||"알 수 없음")+")");
 async function loadApi(){if(!/^https?:$/.test(location.protocol))return;try{const r=await fetch("/api/config",{cache:"no-store"});if(!r.ok)return;const c=await r.json();if(c&&c.wiki){S.api=c;if(c.firebase&&!c.firebase.error&&c.firebase.apiKey)initFirebase(c.firebase);}}catch(e){}S.apiTried=true;render();}
 const srcCard=(n,title,host,url)=>`<${url?`a class="src" href="${esc(url)}" target="_blank" rel="noopener"`:'div class="src"'} style="text-decoration:none;color:inherit"><span class="n">${n}</span><span class="grow"><b style="font-weight:500">${esc(title)}</b><br><span class="muted" style="font-size:11.5px">${esc(host)}</span></span>${url?ic("ext",14):""}</${url?"a":"div"}>`;
@@ -640,6 +641,9 @@ else j=await pubFetch("/api/tools/publish",{...base,kind:"tool",name:t.name,desc
 const was=!!t.pub;t.pub={id:j.id};t.emails=au.emails;save();toast((was?"업데이트했어요":"공개했어요")+(au.invite?(j.sent?` · 초대 메일 ${j.sent}통`:(j.mail?" · 메일은 보내지 못했어요":" · 메일 기능이 아직 꺼져 있어요")):""));}catch(e){toast(e.message);}S.pubBusy=false;render();}
 async function pubOff(id){const k=S.pubKind||"tool",t=pubItem(k,id);if(!t||!t.pub)return;S.pubBusy=true;render();try{await pubFetch(k==="html"?"/api/html/unpublish":"/api/tools/unpublish",{id:t.pub.id});t.pub=null;save();toast("공개를 내렸어요. 링크로 더 이상 열 수 없어요");}catch(e){toast(e.message);}S.pubBusy=false;render();}
 /* 배포된 도구 열기 (/t/아이디) */
+function vHtmlPub(){const id=S.hpId,st=S.hp&&S.hp.id===id?S.hp:null;if(!st){S.hp={id,loading:true};fetch("/api/html/"+encodeURIComponent(id)).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(x=>{S.hp={id,data:x.ok?x.j:null,err:x.ok?"":x.j.error||"없는 페이지예요"};if(x.ok)document.title=x.j.title||"LAGO";render();}).catch(()=>{S.hp={id,err:"불러오지 못했어요"};render();});}
+const d=st&&st.data;if(!d)return `<div class="pubpage"><main class="wrap pubmain"><div class="card"><b>${esc(!st||st.loading?"불러오는 중…":(st.err||"열 수 없는 페이지예요"))}</b></div></main></div>`;
+return `<iframe title="${esc(d.title)}" sandbox="allow-scripts allow-forms allow-popups allow-modals" referrerpolicy="no-referrer" srcdoc="${esc(d.code)}" style="position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff"></iframe><a href="/" style="position:fixed;right:10px;bottom:10px;z-index:2;font:12px system-ui;background:#0B1F55;color:#fff;padding:5px 10px;border-radius:99px;text-decoration:none;opacity:.85">LAGO로 만든 페이지</a>`;}
 function vToolPub(){const id=S.tpId,st=S.tp&&S.tp.id===id?S.tp:null;if(!st){S.tp={id,loading:true};authGet("/api/tools/"+encodeURIComponent(id)).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(x=>{S.tp={id,data:x.ok?x.j:null,err:x.ok?"":x.j.error||"없는 도구예요",login:!x.ok&&!!x.j.needLogin};render();}).catch(()=>{S.tp={id,err:"불러오지 못했어요"};render();});}
 const t=st&&st.data;let body="";
 if(!st||st.loading)body=`<p class="muted">불러오는 중…</p>`;
@@ -681,7 +685,7 @@ if(!S.user&&!PUBLIC.includes(r)){if(PATHMODE&&!S.after)S.after=location.pathname
 if(S.user&&(r==="login"||r==="join")){go("home",true);return;}
 if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-extract","tool-summary","tools","tool-new","tool-my","tool-pub"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");go("home",true);return;}
 if(r==="code"||r==="code-chat"||r==="code-folder")S.area="code";else if(["home","chat","projects","project","agents","agent","agent-new"].includes(r))S.area="talk";
-const v={shared:vShared,tools:vTools,"tool-new":vToolNew,"tool-my":vToolMy,"tool-pub":vToolPub,"share-view":vShareView,"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
+const v={"html-pub":vHtmlPub,shared:vShared,tools:vTools,"tool-new":vToolNew,"tool-my":vToolMy,"tool-pub":vToolPub,"share-view":vShareView,"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
 const html=v();if(!html)return;const rk=location.pathname+location.hash,oldSc=document.querySelector(".main > .scroll"),keepTop=oldSc&&S.rk===rk?oldSc.scrollTop:0,qv=S.rk===rk&&$("#q")?$("#q").value:"";S.rk=rk;$("#app").innerHTML=html;if(keepTop){const ns=document.querySelector(".main > .scroll");if(ns&&!$("#sc"))ns.scrollTop=keepTop;}
 const sc=$("#sc");if(sc)sc.scrollTop=sc.scrollHeight;
 if($("#bc"))startBrand();
@@ -730,7 +734,7 @@ if(d.todo!=null&&t.tagName==="INPUT")return;
 switch(d.act){
 case"replay":brandStage&&brandStage.play();break;
 case"demo":S.user={...DEMO};store.set("lago_session",S.user);loadUser();toast("예시 계정으로 들어왔어요");go("home");break;
-case"google":if(S.fb){try{await S.fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){const m=$("#lerr")||$("#jerr");if(m)m.textContent=fbMsg(e);else toast(fbMsg(e));}break;}toast("Google 로그인은 실제 서비스에서 연결돼요. 지금은 예시 계정으로 들어갈게요.");S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");break;
+case"google":{const bl=fbBlock();if(bl){const m=$("#lerr")||$("#jerr");if(m)m.textContent=bl;else toast(bl);break;}}if(S.fb){try{await S.fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){const m=$("#lerr")||$("#jerr");if(m)m.textContent=fbMsg(e);else toast(fbMsg(e));}break;}toast("Google 로그인은 실제 서비스에서 연결돼요. 지금은 예시 계정으로 들어갈게요.");S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");break;
 case"forgot":{const em=($("#le")||{}).value||"";if(!em){toast("이메일을 먼저 입력해 주세요");break;}if(S.fb){try{await S.fb.auth.sendPasswordResetEmail(em);toast("재설정 메일을 보냈어요. 받은편지함을 확인해 주세요");}catch(e){toast(fbMsg(e));}break;}toast(esc(em)+"로 재설정 메일을 보냈어요 (미리보기)");break;}
 case"verified":{const u=store.get("lago_users",{})[S.pendingVerify];if(u){S.user={email:S.pendingVerify,name:u.name,plan:"Free"};store.set("lago_session",S.user);loadUser();toast("인증됐어요. 환영해요!");go("home");}else go("login");break;}
 case"resend":toast("인증 메일을 다시 보냈어요 (1분에 한 번)");break;
@@ -859,6 +863,7 @@ if(f.id==="todoForm"){const v=$("#todoIn").value.trim();if(v){S.todos.push({t:v,
 if(f.id==="loginForm"){const em=$("#le").value.trim().toLowerCase(),pw=$("#lp").value,err=$("#lerr");
  if(!/^\S+@\S+\.\S+$/.test(em)){err.textContent="이메일 주소를 확인해 주세요.";$("#le").focus();return;}
  if(!pw){err.textContent="비밀번호를 입력해 주세요.";$("#lp").focus();return;}
+ {const bl=em!==DEMO.email&&fbBlock();if(bl){err.textContent=bl;return;}}
  if(S.fb&&em!==DEMO.email){err.textContent="";const b=f.querySelector("button.pri,button[type=submit]");if(b)b.disabled=true;try{await S.fb.auth.signInWithEmailAndPassword(em,pw);toast("다시 오신 걸 환영해요");}catch(e){err.textContent=fbMsg(e);}if(b)b.disabled=false;return;}
  if(em===DEMO.email){S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");return;}
  const u=store.get("lago_users",{})[em];if(!u){err.textContent="가입된 이메일이 아니에요. 회원가입을 먼저 해 주세요.";return;}
@@ -872,6 +877,7 @@ if(f.id==="joinForm"){const n=$("#jn").value.trim(),em=$("#je").value.trim().toL
  const by=+$("#jy").value,bm=+$("#jm").value,bd=+$("#jd").value,now=new Date();let age=now.getFullYear()-by;if(now.getMonth()+1<bm||(now.getMonth()+1===bm&&now.getDate()<bd))age--;
  if(age<14){S.kid={sent:false,email:""};go("kid");return;}
  if(!$("#jt").checked){err.textContent="이용약관 · 개인정보 처리방침에 동의해 주세요.";return;}
+ {const bl=fbBlock();if(bl){err.textContent=bl;return;}}
  if(S.fb){err.textContent="";const b=f.querySelector("button.pri,button[type=submit]");if(b)b.disabled=true;S.signingUp=true;try{const cr=await S.fb.auth.createUserWithEmailAndPassword(em,pw);await cr.user.updateProfile({displayName:n});S.pendingName=n;await S.fb.db.doc("users/"+cr.user.uid+"/data/main").set({name:n,plan:"Free",chats:[],learn:$("#jl").checked,learnImg:$("#jl").checked,age14:new Date().toISOString().slice(0,10),created:Date.now()});try{await cr.user.sendEmailVerification();}catch(e){}if(S.user)S.user.name=n;render();toast(n+"님, 가입했어요. 확인 메일도 보냈어요");}catch(e){err.textContent=fbMsg(e);}S.signingUp=false;if(b)b.disabled=false;return;}
  const users=store.get("lago_users",{});if(users[em]||em===DEMO.email){err.textContent="이미 가입된 이메일이에요. 로그인해 주세요.";return;}
  users[em]={name:n,hash:await hash(pw),verified:false,plan:"Free",learn:$("#jl").checked,age14:new Date().toISOString().slice(0,10)};store.set("lago_users",users);
