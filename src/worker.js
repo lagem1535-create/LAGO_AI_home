@@ -101,6 +101,100 @@ async function llamaChat(env, base, system, user, maxTok, signal) {
   return { answer: String(d?.choices?.[0]?.message?.content || "") };
 }
 
+// ---------- 대화 공유 · AI 도구 배포 (KV에 저장, 링크로 누구나 읽기) ----------
+const rid = () => { const a = new Uint8Array(8); crypto.getRandomValues(a); return [...a].map((x) => "abcdefghjkmnpqrstuvwxyz23456789"[x % 31]).join(""); };
+const cap = (v, n) => String(v == null ? "" : v).slice(0, n);
+async function pubGate(req, env, url, ctx) {
+  const origin = req.headers.get("origin");
+  if (origin && origin !== url.origin) return { err: json({ error: "허용되지 않은 요청이에요" }, 403) };
+  if (!env.ADMIN_KV) return { err: json({ error: "저장소(ADMIN_KV)가 연결되지 않았어요" }, 503) };
+  const u = await tokenUser(req, env);
+  if (!u) return { err: json({ error: "로그인이 필요해요" }, 401) };
+  if (saOf(env)) { const m = await getMod(env, u.localId); if (m.banned || (m.tempBan && (m.bannedUntil || 0) > Date.now())) return { err: json({ error: "사용이 제한된 계정이에요" }, 403) }; }
+  const k = `pub:${u.localId}:${day()}`, n = parseInt((await env.ADMIN_KV.get(k)) || "0", 10);
+  if (n >= 60) return { err: json({ error: "오늘은 공유·배포를 더 할 수 없어요" }, 429) };
+  await env.ADMIN_KV.put(k, String(n + 1), { expirationTtl: 172800 });
+  return { u };
+}
+async function shareTools(req, env, url, ctx, p) {
+  const post = req.method === "POST";
+  // 공개 읽기
+  let m = p.match(/^\/api\/share\/([a-z0-9]{6,16})$/);
+  if (m && req.method === "GET") {
+    const o = env.ADMIN_KV && await env.ADMIN_KV.get("share:" + m[1]);
+    if (!o) return json({ error: "공유가 끝났거나 없는 링크예요" }, 404);
+    const d = JSON.parse(o); return json({ title: d.title, name: d.name, msgs: d.msgs, at: d.at, upd: d.upd }, 200, { "x-robots-tag": "noindex" });
+  }
+  m = p.match(/^\/api\/tools\/([a-z0-9]{6,16})$/);
+  if (m && req.method === "GET") {
+    const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + m[1]);
+    if (!o) return json({ error: "배포가 끝났거나 없는 도구예요" }, 404);
+    const d = JSON.parse(o); return json({ id: m[1], name: d.name, desc: d.desc, input: d.input, opts: d.opts, owner: d.ownerName || "", runs: d.runs || 0 });
+  }
+  if (!post) return json({ error: "POST만 돼요" }, 405);
+  if (p === "/api/share") {
+    const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
+    let b = {}; try { b = await req.json(); } catch {}
+    const msgs = (Array.isArray(b.msgs) ? b.msgs : []).slice(0, 200).map((x) => {
+      const o = { r: x && x.r === "a" ? "a" : "u", t: cap(x && x.t, 4000) };
+      if (x && x.att && x.att.name) o.att = { kind: ["image", "file", "text"].includes(x.att.kind) ? x.att.kind : "file", name: cap(x.att.name, 80), chars: +x.att.chars || 0 };
+      if (Array.isArray(x && x.src)) o.src = x.src.slice(0, 8).map((y) => ({ n: +y.n || 0, title: cap(y.title, 100), db: cap(y.db, 20), url: /^https?:\/\//.test(y.url || "") ? cap(y.url, 300) : "", date: cap(y.date, 10), publisher: cap(y.publisher, 40) }));
+      return o;
+    }).filter((x) => x.t);
+    if (!msgs.length) return json({ error: "공유할 대화가 비어 있어요" }, 400);
+    const d = { title: cap(b.title, 60) || "대화", name: b.showName ? cap(b.name, 30) : "", msgs, owner: g.u.localId, at: Date.now() };
+    if (JSON.stringify(d).length > 180000) return json({ error: "대화가 너무 길어요. 앞부분을 줄여서 공유해 주세요" }, 413);
+    let id = /^[a-z0-9]{6,16}$/.test(b.id || "") ? b.id : "";
+    if (id) {
+      const old = await env.ADMIN_KV.get("share:" + id);
+      if (old) { const od = JSON.parse(old); if (od.owner !== g.u.localId) return json({ error: "내 공유가 아니에요" }, 403); d.at = od.at; d.upd = Date.now(); } else id = "";
+    }
+    if (!id) id = rid();
+    await env.ADMIN_KV.put("share:" + id, JSON.stringify(d));
+    return json({ ok: true, id, url: url.origin + "/s/" + id });
+  }
+  if (p === "/api/share/delete" || p === "/api/tools/unpublish") {
+    const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
+    let b = {}; try { b = await req.json(); } catch {}
+    const key = (p === "/api/share/delete" ? "share:" : "tool:") + cap(b.id, 16);
+    const o = await env.ADMIN_KV.get(key);
+    if (o) { if (JSON.parse(o).owner !== g.u.localId) return json({ error: "내 것이 아니에요" }, 403); await env.ADMIN_KV.delete(key); }
+    return json({ ok: true });
+  }
+  if (p === "/api/tools/publish") {
+    const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
+    let b = {}; try { b = await req.json(); } catch {}
+    const name = cap(b.name, 30).trim(), ins = cap(b.ins, 1500).trim();
+    if (!name || !ins) return json({ error: "이름과 지시문이 필요해요" }, 400);
+    const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now() };
+    let id = /^[a-z0-9]{6,16}$/.test(b.id || "") ? b.id : "";
+    if (id) {
+      const old = await env.ADMIN_KV.get("tool:" + id);
+      if (old) { const od = JSON.parse(old); if (od.owner !== g.u.localId) return json({ error: "내 도구가 아니에요" }, 403); d.at = od.at; d.runs = od.runs || 0; } else id = "";
+    }
+    if (!id) {
+      const k = "utools:" + g.u.localId, list = JSON.parse((await env.ADMIN_KV.get(k)) || "[]").filter(Boolean);
+      const live = []; for (const x of list) if (await env.ADMIN_KV.get("tool:" + x)) live.push(x);
+      if (live.length >= 10) return json({ error: "배포한 도구는 10개까지예요. 하나를 내려 주세요" }, 400);
+      id = rid(); live.push(id); await env.ADMIN_KV.put(k, JSON.stringify(live));
+    }
+    await env.ADMIN_KV.put("tool:" + id, JSON.stringify(d));
+    return json({ ok: true, id, url: url.origin + "/t/" + id });
+  }
+  if (p === "/api/tools/run") {
+    let b = {}; try { b = await req.clone().json(); } catch {}
+    const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + cap(b.id, 16));
+    if (!o) return json({ error: "배포가 끝났거나 없는 도구예요" }, 404);
+    const d = JSON.parse(o);
+    const ins = d.ins + (b.opt && d.opts.includes(b.opt) ? "\n선택한 옵션: " + b.opt : "");
+    const r2 = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify({ task: "agent", q: cap(b.text, 500), ctx: cap(b.text, 3000), agent: { name: d.name, instructions: ins } }) });
+    const res = await chat(r2, env, url, ctx);
+    if (res.status === 200 && ctx && ctx.waitUntil) ctx.waitUntil(env.ADMIN_KV.put("tool:" + b.id, JSON.stringify({ ...d, runs: (d.runs || 0) + 1 })));
+    return res;
+  }
+  return json({ error: "없는 경로예요" }, 404);
+}
+
 async function chat(req, env, url, ctx) {
   const origin = req.headers.get("origin");
   if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);
@@ -129,7 +223,8 @@ async function chat(req, env, url, ctx) {
   const hist = (Array.isArray(b.hist) ? b.hist : []).slice(-6).map((h) => ({ r: h && h.r === "a" ? "a" : "u", t: String((h && h.t) || "").replace(/\s+/g, " ").slice(0, 300) })).filter((h) => h.t);
   const lastU = [...hist].reverse().find((h) => h.r === "u");
   const sq = lastU && q.length <= 30 ? (lastU.t.slice(0, 120) + " " + q).slice(0, 500) : q;
-  const histTxt = hist.length ? "이전 대화:\n" + hist.map((h) => (h.r === "u" ? "사용자: " : "LAGO: ") + h.t).join("\n") + "\n\n" : "";
+  const ctxIn = String(b.ctx || "").trim().slice(0, 3000);
+  const histTxt = (ctxIn && b.task !== "agent" ? "첨부한 글:\n" + ctxIn + "\n\n" : "") + (hist.length ? "이전 대화:\n" + hist.map((h) => (h.r === "u" ? "사용자: " : "LAGO: ") + h.t).join("\n") + "\n\n" : "");
   if (task === "ask") {
     // 1순위: Kaggle 서버의 검색 DB(위키·뉴스·법령·판례…)로 답하기 (/ask). 없거나 아직 올리는 중이면 아래 위키백과 방식으로 대신해요.
     const shapeRefs = (arr) => (Array.isArray(arr) ? arr : []).slice(0, 8).map((x) => ({
@@ -208,14 +303,15 @@ async function chat(req, env, url, ctx) {
     } catch (e) { /* 모델 서버 연결 문제는 아래 /generate 에서 다시 확인해요 */ }
     finally { clearTimeout(t0); }
     try { refs = (await wiki(sq)).results || []; } catch {}
+    if (ctxIn) refs.unshift({ title: "첨부한 글", extract: ctxIn, url: "", att: true });
     const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
-    user = `참고자료:\n${ctxText}\n\n${histTxt}질문: ${q}`;
+    user = `참고자료:\n${ctxText}\n\n${histTxt.replace(/^첨부한 글:[\s\S]*?\n\n/, "")}질문: ${q}`;
   } else if (task === "agent") {
     const ag = b.agent || {};
     const nm = String(ag.name || "에이전트").slice(0, 40), ins = String(ag.instructions || "").slice(0, 1500);
     if (!ins) return json({ error: "에이전트 지시문이 비어 있어요" }, 400);
     system = `너는 LAGO AI의 '${nm}' 에이전트다. 아래 지시를 따라 한국어로 짧고 정확하게 답하라. 모르는 것은 모른다고 말하라. URL을 직접 쓰지 마라.\n지시: ${ins}`;
-    user = q;
+    user = ctxIn || q;
   } else {
     const text = String(b.text || "").trim().slice(0, task === "translate" ? 1500 : 3000);
     if (!text) return json({ error: "글이 비어 있어요" }, 400);
@@ -249,7 +345,7 @@ async function chat(req, env, url, ctx) {
     let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: "위키백과", cited: cited.includes(i + 1) })), refs: refs.length });
+    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : "위키백과", cited: cited.includes(i + 1) })), refs: refs.length });
   } catch (e) {
     return json({ error: lurl ? "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" : "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
   } finally { clearTimeout(t); }
@@ -851,13 +947,14 @@ export default {
     const env = await withSecrets(rawEnv);
     const url = new URL(req.url);
     const p = url.pathname;
-    if (!p.startsWith("/api/")) return env.ASSETS.fetch(req);
+    if (!p.startsWith("/api/")) { const ar = await env.ASSETS.fetch(req); if (p.startsWith("/s/") || p.startsWith("/t/")) { const h = new Headers(ar.headers); h.set("x-robots-tag", "noindex"); return new Response(ar.body, { status: ar.status, headers: h }); } return ar; }
     try {
       if (p === "/api/tasks/sync") return req.method === "POST" ? await tasksSync(req, env, url) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/me") return req.method === "GET" ? await me(req, env, url) : json({ error: "GET만 돼요" }, 405);
       if (p === "/api/admin/model-url") return req.method === "POST" ? await registerModelUrl(req, env) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
+      if (p.startsWith("/api/share") || p.startsWith("/api/tools/")) return await shareTools(req, env, url, ctx, p);
       if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/notify") return req.method === "POST" ? (bump(env, ctx, "notify"), await notify(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (req.method !== "GET") return json({ error: "GET만 돼요" }, 405);

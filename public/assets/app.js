@@ -30,14 +30,14 @@ const AGENT_COLORS=["#1B3E9E","#C2603A","#4A5FA8","#1F8A4C","#2BA3B8","#7A5AE0",
 const DEMO={email:"dani@lago.ai",name:"다니",plan:"Pro"};
 
 /* ---------- state ---------- */
-const S={pinTools:[],conn:false,services:{},customMcp:[],flyout:false,flyTool:"translate",kidReqs:[],tasks:[],sideOff:false,user:null,area:"talk",mode:"Fonte",pinned:[],study:false,timeReq:null,extra:0,ptab:"general",cmode:"Code Corrente",think:1,web:0,menu:false,drawer:false,chats:[],cur:null,projects:SEED_PROJECTS.map(p=>({...p})),curProject:null,temp:false,learn:true,learnImg:true,confirm:null,preview:false,todos:[{t:"장보기",d:true},{t:"LAGO 데이터셋 정리",d:false},{t:"운동 30분",d:false}],kid:{sent:false,email:""},myAgents:[],favs:[],agentTab:"lago",agentCat:"전체",curAgent:null,editAgent:null,acct:false,goccia:false,gview:null,verify:"card",pendingVerify:null};
-const PKEYS=["pinTools","services","customMcp","kidReqs","extra","limit","night","kThink","kCode","kStudy","kBreak","tasks","guardian"];const pk=()=>Object.fromEntries(PKEYS.map(k=>[k,S[k]]));
+const S={myTools:[],pinTools:[],conn:false,services:{},customMcp:[],flyout:false,flyTool:"translate",kidReqs:[],tasks:[],sideOff:false,user:null,area:"talk",mode:"Fonte",pinned:[],study:false,timeReq:null,extra:0,ptab:"general",cmode:"Code Corrente",think:1,web:0,menu:false,drawer:false,chats:[],cur:null,projects:SEED_PROJECTS.map(p=>({...p})),curProject:null,temp:false,learn:true,learnImg:true,confirm:null,preview:false,todos:[{t:"장보기",d:true},{t:"LAGO 데이터셋 정리",d:false},{t:"운동 30분",d:false}],kid:{sent:false,email:""},myAgents:[],favs:[],agentTab:"lago",agentCat:"전체",curAgent:null,editAgent:null,acct:false,goccia:false,gview:null,verify:"card",pendingVerify:null};
+const PKEYS=["myTools","pinTools","services","customMcp","kidReqs","extra","limit","night","kThink","kCode","kStudy","kBreak","tasks","guardian"];const pk=()=>Object.fromEntries(PKEYS.map(k=>[k,S[k]]));
 function syncReq(){const r=(S.kidReqs||[])[0];S.timeReq=r?(r.status==='pending'?'wait':r.status):null;}
 function bootDone(){if(S.booting){S.booting=false;render();}}
 function loadUser(){const s=store.get("lago_session",null);if(!s)return;S.user=s;const d=store.get("lago_data_"+s.email,null);if(d){PKEYS.forEach(k=>{if(d[k]!=null)S[k]=d[k];});syncReq();S.chats=d.chats||[];S.learn=d.learn!==false;S.learnImg=d.learnImg!==false;if(d.mode&&TALK_MODES.some(m=>m.id===d.mode))S.mode=d.mode;if(d.pinned)S.pinned=d.pinned;S.myAgents=d.myAgents||[];S.favs=d.favs||[];if(d.think!=null)S.think=d.think;if(d.web!=null)S.web=d.web;}}
 function slimChats(list,lim){const ok=a=>JSON.stringify(a).length<lim;let a=list;if(ok(a))return a;
-a=a.map(c=>c.id===S.cur?c:{...c,msgs:c.msgs.map(m=>m.html?{...m,html:undefined}:m)});if(ok(a))return a;
-a=a.map(c=>({...c,msgs:c.msgs.map(m=>m.html?{...m,html:undefined}:m)}));
+const st=m=>m.html||(m.att&&m.att.thumb)?{...m,html:undefined,att:m.att?{...m.att,thumb:undefined}:undefined}:m;a=a.map(c=>c.id===S.cur?c:{...c,msgs:c.msgs.map(st)});if(ok(a))return a;
+a=a.map(c=>({...c,msgs:c.msgs.map(st)}));
 while(a.length>1&&!ok(a)){let i=a.length-1;while(i>0&&(a[i].id===S.cur||a[i].pin))i--;a=a.filter((_,j)=>j!==i);}return a;}
 function save(){if(!S.user)return;if(S.user.uid){fbSave();return;}store.set("lago_data_"+S.user.email,{myAgents:S.myAgents,favs:S.favs,pinned:S.pinned,chats:slimChats(S.chats.filter(c=>!c.temp&&!c.kid),3000000),learn:S.learn,learnImg:S.learnImg,mode:S.mode,think:S.think,web:S.web,...pk()});}
 
@@ -45,23 +45,23 @@ const me=()=>S.goccia?{name:"지우",plan:"Goccia",email:"kid"}:S.user;
 const allAgents=()=>[...S.myAgents,...OFFICIAL];
 const agentById=id=>allAgents().find(a=>a.id===id);
 /* ---------- router ---------- */
-const ROUTES=["tool-translate","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin","admin-user"];
-const PUBLIC=["login","join","verify","kid","terms"];
+const ROUTES=["tools","tool-new","tool-my","tool-pub","share-view","tool-translate","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin","admin-user"];
+const PUBLIC=["login","join","verify","kid","terms","share-view","tool-pub"];
 const PATHMODE=(()=>{const m=document.querySelector('meta[name="lago-router"]');return !!m&&m.content==="path"&&/^https?:$/.test(location.protocol)&&!!history.pushState;})();
 /* 주소: 서버에서는 /chat, /chat/<대화번호>, /admin/user 처럼 실제 경로를 써요. 미리보기(한 파일)에서는 #chat 처럼 #을 써요. */
-function urlFor(r){if(!PATHMODE)return"#"+r;if(r==="home")return"/";if((r==="chat"||r==="code-chat")&&S.cur)return"/"+r+"/"+encodeURIComponent(S.cur);if(r==="admin-user")return"/admin/user";return"/"+r;}
+function urlFor(r){if(!PATHMODE)return"#"+r;if(r==="home")return"/";if((r==="chat"||r==="code-chat")&&S.cur)return"/"+r+"/"+encodeURIComponent(S.cur);if(r==="admin-user")return"/admin/user";if(r==="tool-my"&&S.curTool)return"/tool-my/"+encodeURIComponent(S.curTool);return"/"+r;}
 function route(){
 if(!PATHMODE){const h=location.hash.slice(1);return ROUTES.includes(h)?h:(S.user?"home":"login");}
 const seg=location.pathname.replace(/\/+$/,"").split("/").slice(1).map(decodeURIComponent);
-let r=seg[0]||"home";if(r==="admin"&&seg[1]==="user")r="admin-user";
+let r=seg[0]||"home";if(r==="admin"&&seg[1]==="user")r="admin-user";if(r==="s"){S.svId=seg[1]||"";r="share-view";}else if(r==="t"){S.tpId=seg[1]||"";r="tool-pub";}else if(r==="tool-my"&&seg[1])S.curTool=seg[1];
 if(!ROUTES.includes(r))return S.user?"home":"login";
 if((r==="chat"||r==="code-chat")&&seg[1])S.cur=seg[1];
 return r;}
 function go(r,replace){if(!PATHMODE){if(location.hash==="#"+r)render();else location.hash=r;return;}
 const u=urlFor(r);if(location.pathname===u){render();return;}
 history[replace?"replaceState":"pushState"](null,"",u);onNav();}
-document.addEventListener("mouseover",e=>{const it=e.target.closest&&e.target.closest(".flyitem");if(!it||!S.flyout||S.flyTool===it.dataset.tool)return;S.flyTool=it.dataset.tool;const t=TOOLS.find(x=>x.id===S.flyTool);document.querySelectorAll(".flyitem").forEach(b=>b.classList.toggle("on",b===it));const pv=$(".flyprev");if(pv&&t)pv.innerHTML=flyPrev(t);});
-function onNav(){S.menu=false;S.drawer=false;S.acct=false;S.cmenu=null;S.share=null;S.renameChat=null;S.delChat=null;S.flyout=false;S.tempAsk=false;S.confirm=null;render();}
+document.addEventListener("mouseover",e=>{const it=e.target.closest&&e.target.closest(".flyitem");if(!it||!S.flyout||!it.dataset.tool||S.flyTool===it.dataset.tool)return;S.flyTool=it.dataset.tool;const t=TOOLS.find(x=>x.id===S.flyTool);document.querySelectorAll(".flyitem").forEach(b=>b.classList.toggle("on",b===it));const pv=$(".flyprev");if(pv&&t)pv.innerHTML=flyPrev(t);});
+function onNav(){S.plus=false;S.menu=false;S.drawer=false;S.acct=false;S.cmenu=null;S.share=null;S.renameChat=null;S.delChat=null;S.flyout=false;S.tempAsk=false;S.confirm=null;render();}
 addEventListener(PATHMODE?"popstate":"hashchange",onNav);
 
 /* ---------- auth screens ---------- */
@@ -125,7 +125,7 @@ const cust=()=>(S.customMcp||[]).map(x=>typeof x==="string"?{name:x.replace(/^ht
 const pendingReq=()=>(S.kidReqs||[]).filter(x=>x.status==="pending").length;
 function flyPrev(t){const pin=S.pinTools.includes(t.id);return `<div class="flyart" style="--c:${t.c}">${ic(t.ic,38)}</div><b>${t.lab}</b><p>${t.d}</p><ol>${t.steps.map((x,i)=>`<li><i>${i+1}</i><span>${x}</span></li>`).join("")}</ol><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" data-go="${t.route}">${t.cta}</button><button class="btn sm" data-pintool="${t.id}">${ic("pin",14)} ${pin?"사이드바에서 빼기":"사이드바에 고정"}</button></div>`;}
 function flyout(){const cur=TOOLS.find(t=>t.id===S.flyTool)||TOOLS[0];
-return `<div class="flywrap" data-act="flyout"></div><div class="flyout ${S.sideOff?"atrail":""}" role="dialog" aria-label="AI 도구"><div class="flylist">${TOOLS.map(t=>`<button class="flyitem ${t.id===cur.id?"on":""}" data-tool="${t.id}" data-go="${t.route}"><span class="fi">${ic(t.ic,19)}</span><span class="grow"><b>${t.lab}</b><small>${t.d}</small></span>${S.pinTools.includes(t.id)?ic("pin",14):""}</button>`).join("")}</div><div class="flyprev">${flyPrev(cur)}</div></div>`;}
+return `<div class="flywrap" data-act="flyout"></div><div class="flyout ${S.sideOff?"atrail":""}" role="dialog" aria-label="AI 도구"><div class="flylist">${TOOLS.map(t=>`<button class="flyitem ${t.id===cur.id?"on":""}" data-tool="${t.id}" data-go="${t.route}"><span class="fi">${ic(t.ic,19)}</span><span class="grow"><b>${t.lab}</b><small>${t.d}</small></span>${S.pinTools.includes(t.id)?ic("pin",14):""}</button>`).join("")}${(S.myTools||[]).map(t=>`<button class="flyitem" data-ctool="${t.id}"><span class="fi" style="background:#5B6CC9;color:#fff">${ic("bot",19)}</span><span class="grow"><b>${esc(t.name)}</b><small>내 도구 · ${esc(t.desc||"")}</small></span></button>`).join("")}<button class="flyitem" data-act="newTool"><span class="fi">${ic("plus",19)}</span><span class="grow"><b>AI 도구 만들기</b><small>내 지시문으로 나만의 도구를 만들고 배포해요</small></span></button><button class="flyitem" data-go="tools"><span class="fi">${ic("grid",19)}</span><span class="grow"><b>도구 모두 보기</b></span></button></div><div class="flyprev">${flyPrev(cur)}</div></div>`;}
 function railBar(){const code=S.area==="code",kid=S.goccia,r=route();const b=(k,act,t,on)=>`<button class="railbtn ${on?"on":""}" ${act} aria-label="${t}" title="${t}">${ic(k,20)}</button>`;
 return `<nav class="rail" aria-label="빠른 메뉴">${b("panel",'data-act="sideToggle"',"사이드바 열기 (Ctrl B)")}<div class="railsep"></div>${b("pen",'data-act="new"',"새 대화 (Ctrl K)")}${b("search",'data-act="search"',"검색")}${code?b("folder",'data-go="code-folder"',"작업 폴더",r==="code-folder")+b("term",'data-act="term"',"터미널"):kid?b("bot",'data-go="agents"',"에이전트",r==="agents"):b("folder",'data-go="projects"',"프로젝트",r==="projects"||r==="project")+b("bot",'data-go="agents"',"에이전트",r==="agents")+b("clock",'data-go="tasks"',"예약 작업",r==="tasks")+b("plug",'data-go="services"',"서비스 연결",r==="services")+b("grid",'data-act="flyout"',"AI 도구",S.flyout)+S.pinTools.map(id=>{const t=TOOLS.find(x=>x.id===id);return t?b(t.ic,`data-go="${t.route}"`,t.lab,r===t.route):""}).join("")}<span class="grow"></span><button class="railbtn av" data-act="acct" aria-label="계정 메뉴" ${kid?'style="background:var(--k);color:#fff"':""}>${esc(me().name.slice(0,1))}${!kid&&pendingReq()?'<i class="dot"></i>':""}</button></nav>`;}
 function sidebar(){const code=S.area==="code";const r=route();const kid=S.goccia;
@@ -173,8 +173,9 @@ function composer(ph){const code=S.area==="code";const modes=code?CODE_MODES:TAL
 const pop=S.menu?`<div class="pop" role="dialog" aria-label="모델 고르기"><div class="hint" style="padding:6px 10px">모델</div>${modes.map(m=>`<button class="opt ${m.id===cur?"on":""}" data-mode="${m.id}"><span class="mi" style="background:${m.c}22;color:${m.c}">${ic(m.ic,18)}</span><span class="grow"><b>${m.lab}</b><span class="ver">${m.id} 1.0</span><small>${m.d}</small></span>${m.id===cur?`<span style="color:${m.c}">${ic("check",18)}</span>`:""}</button>`).join("")}
 ${(code||cur==="Mare")?`<div style="height:1px;background:#EEF2F8;margin:6px 4px"></div><div class="popsec"><div class="row">${ic("brain",15)} 생각 강도</div><div class="seg">${["낮게","보통","깊게"].map((t,i)=>`<button aria-pressed="${S.think===i}" data-think="${i}">${t}</button>`).join("")}</div></div>`:""}</div>`:"";
 const connPop=S.conn?`<div class="pop connpop" role="dialog" aria-label="커넥터"><div class="hint" style="padding:6px 10px">연결된 서비스 (MCP)</div>${(()=>{const on=[...SERVICES.filter(x=>S.services[x[0]]).map(x=>[x[1],x[4]]),...cust().map(x=>[x.name,"#334"])];return on.length?on.map(x=>`<div class="opt" style="cursor:default"><span class="svcico sm" style="background:${x[1]}">${esc(x[0].slice(0,1))}</span><span class="grow"><b>${esc(x[0])}</b></span><span style="color:var(--g)">${ic("check",16)}</span></div>`).join(""):`<p class="muted" style="margin:0;padding:6px 10px 10px;font-size:13px">아직 연결한 서비스가 없어요.</p>`;})()}<div style="height:1px;background:#EEF2F8;margin:6px 4px"></div><button type="button" class="opt" data-go="services">${ic("plug",17)}<span class="grow"><b>서비스 연결 열기</b></span>${ic("right",14)}</button></div>`:"";
-return `<form class="composer" id="composer">${pop}${connPop}<textarea id="q" rows="1" placeholder="${esc(ph)}" aria-label="메시지"></textarea>
-<div class="tools"><button type="button" class="round" data-act="attach" aria-label="파일 첨부">${ic("clip",17)}</button>
+return `<form class="composer" id="composer">${pop}${connPop}${S.plus&&!S.goccia?plusPop():""}<textarea id="q" rows="1" placeholder="${esc(ph)}" aria-label="메시지"></textarea>
+${selRow()}
+<div class="tools">${S.goccia?"":`<button type="button" class="round" data-act="plus" aria-label="첨부와 AI 도구" aria-expanded="${!!S.plus}" aria-haspopup="dialog">${ic("plus",18)}</button><input type="file" id="cfile" hidden accept=".pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.srt,.log,image/*">`}
 ${code?`<button type="button" class="chip plain" data-go="code-folder">${ic("folder",15)}<span class="wl">lago_app</span></button><button type="button" class="chip" data-act="term">${ic("term",15)}<span class="wl">터미널 모드</span></button>`:""}
 ${S.goccia?`<button type="button" class="chip studychip" data-act="study" aria-pressed="${S.study||S.kStudy===true}">${ic("book",15)} 공부 모드</button>`:""}
 ${S.goccia||code?"":`<button type="button" class="chip connchip" data-act="conn" aria-expanded="${S.conn}" aria-haspopup="dialog" title="커넥터 (MCP)">${ic("plug",15)}<span class="wl">MCP${connCount()?" "+connCount():""}</span></button>`}<button type="button" class="modebtn" data-act="menu" aria-expanded="${S.menu}" aria-haspopup="dialog"><b>${cm.lab}</b><span class="mid">${cur} 1.0</span>${ic("down",15)}</button>
@@ -195,19 +196,21 @@ ${S.goccia?kidHome():""}${tm||S.goccia?"":`<div class="quicktools">${TOOLS.map(t
 function curChat(){return S.chats.find(c=>c.id===S.cur);}
 function vChat(){const c=curChat();if(!c){go(S.area==="code"?"code":"home");return "";}
 const code=c.area==="code";
-const msgs=c.msgs.map(m=>m.role==="user"?`<div class="um">${esc(m.text)}</div>`:aMsg(m,code)).join("");
+const msgs=c.msgs.map(m=>m.role==="user"?userMsg(m):aMsg(m,code)).join("");
 const preview=code?`<aside class="preview ${S.preview?"open":""}" aria-label="미리보기"><div class="bar2"><div class="seg" style="width:auto"><button aria-pressed="true">${ic("eye",13)} 미리보기</button><button aria-pressed="false" data-act="showcode">${ic("code",13)} 코드</button></div><span class="chip plain grow" style="justify-content:flex-start">index.html</span><button class="iconbtn" data-act="todoreset" aria-label="새로고침">${ic("refresh",16)}</button><button class="iconbtn" data-act="preview" aria-label="미리보기 닫기">${ic("x",16)}</button></div><div class="stage">${todoApp()}</div></aside>`:"";
 const ag=c.agent&&agentById(c.agent);
 const ttl=S.renameChat===c.id&&S.renameAt==="top"?`<form class="renamef top" data-rf="${c.id}"><input id="rnc" value="${esc(c.title)}" aria-label="새 대화 이름" maxlength="40"><button class="iconbtn" aria-label="저장">${ic("check",15)}</button></form>`:`<div class="ttlwrap"><button class="ttlbtn" data-cmenu="${c.id}" data-at="top" aria-label="대화 메뉴"><span class="tt">${ag?esc(ag.name)+" · ":""}${esc(c.title)}</span>${ic("down",14)}</button>${S.cmenu===c.id&&S.cmenuAt==="top"?chatMenu(c):""}</div>`;
 return shell(`${topbar(ttl+(S.delChat===c.id?delConfirm(c):""),(c.temp?'<span class="tag" style="background:#1C2440;color:#fff">임시</span>':"")+(code?`<button class="btn sm" data-act="preview">${ic("eye",14)} 미리보기</button>`:(c.temp||S.goccia?"":`<button class="pill" data-act="share" data-id="${c.id}">${ic("share",14)}<span class="pl">공유</span></button>`)))}${S.share?shareModal():""}<div style="display:flex;flex:1;min-height:0"><div style="display:flex;flex-direction:column;flex:1;min-width:0"><div class="scroll" id="sc"><div class="wrap thread">${msgs}</div></div><div class="bottom"><div class="wrap" style="padding:0">${composer(code?"이어서 요청하세요":"더 물어보세요")}<p class="disc" style="margin:8px 0 0">${discText(code)}</p></div></div></div>${preview}</div>`);}
-function shareModal(){const c=S.chats.find(x=>x.id===S.share);if(!c)return "";const on=!!c.shared;const link="https://lago.ai/s/"+c.id.slice(-8);
+function shareModal(){const c=S.chats.find(x=>x.id===S.share);if(!c)return "";const on=!!c.shared&&!!c.shareId;const link=on?location.origin+"/s/"+c.shareId:"";const real=PATHMODE&&S.fb&&S.user&&S.user.uid;const n=c.msgs.filter(m=>!m.loading).length;
 return `<div class="tempask" role="dialog" aria-label="대화 공유" data-act="shareClose"><div class="card sharecard" data-stop="1"><div class="row"><b style="font-size:17px">대화 공유</b><span class="grow"></span><button class="iconbtn" data-act="shareClose" aria-label="닫기">${ic("x",18)}</button></div>
-<div class="shareprev"><b>${esc(c.title)}</b><span class="muted" style="font-size:12px">메시지 ${c.msgs.length}개 · ${esc(S.user.name)}</span><div class="um" style="font-size:12.5px;max-width:100%;align-self:flex-start">${esc((c.msgs[0]||{}).text||"")}</div></div>
-<div class="seg">${[["off","나만 보기"],["on","링크가 있는 사람"]].map(x=>`<button aria-pressed="${(x[0]==="on")===on}" data-shareset="${x[0]}">${x[1]}</button>`).join("")}</div>
+<div class="shareprev"><b>${esc(c.title)}</b><span class="muted" style="font-size:12px">메시지 ${n}개${c.shareName?" · "+esc(S.user.name):""}</span><div class="um" style="font-size:12.5px;max-width:100%;align-self:flex-start">${esc((c.msgs[0]||{}).text||"")}</div></div>
+${real?"":`<div class="note">${ic("info",16)}<span>공유 링크는 로그인한 실제 서비스에서만 만들어져요.</span></div>`}
+<div class="seg">${[["off","나만 보기"],["on","링크가 있는 사람"]].map(x=>`<button aria-pressed="${(x[0]==="on")===on}" data-shareset="${x[0]}" ${S.shareBusy?"disabled":""}>${x[1]}</button>`).join("")}</div>
 ${on?`<div class="row"><input readonly value="${link}" id="shareLink" aria-label="공유 링크" style="font:13px var(--mono)"><button class="btn sm pri" data-act="copy" data-text="${link}">${ic("copy",14)} 복사</button></div>
 <div class="prow" style="padding:6px 0"><span class="grow" style="font-size:13px">출처 카드 함께 보여 주기</span><button class="switch" role="switch" aria-checked="${c.shareSrc!==false}" data-sharesrc="1"></button></div>
 <div class="prow" style="padding:6px 0;border:0"><span class="grow" style="font-size:13px">내 이름 표시</span><button class="switch" role="switch" aria-checked="${!!c.shareName}" data-sharename="1"></button></div>
-<span class="muted" style="font-size:12px">링크를 받은 사람은 지금까지의 대화를 읽기만 할 수 있어요. 이후에 보낸 메시지는 보이지 않아요.</span>`:`<span class="muted" style="font-size:12.5px">지금은 나만 볼 수 있어요. "링크가 있는 사람"을 고르면 공유 링크가 만들어져요.</span>`}</div></div>`;}
+<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="shareUpdate" ${S.shareBusy?"disabled":""}>${ic("refresh",14)} 지금 대화로 업데이트</button></div>
+<span class="muted" style="font-size:12px">링크를 받은 사람은 공유한 대화를 읽기만 할 수 있어요(로그인 필요 없음). 공유한 뒤에 보낸 메시지는 ‘업데이트’를 눌러야 반영돼요. 나만 보기로 바꾸면 링크가 사라져요.</span>`:`<span class="muted" style="font-size:12.5px">지금은 나만 볼 수 있어요. "링크가 있는 사람"을 고르면 이 대화의 읽기 전용 링크가 만들어져요. 링크를 아는 사람은 누구나 볼 수 있으니 개인정보가 없는지 확인해 주세요.</span>`}</div></div>`;}
 function aMsg(m,code){if(m.loading)return `<div class="am"><div class="who">${WM(12)}</div><span class="status think" data-think="${code?"c":"t"}">${ic(code?"brain":"globe",14)} <span class="tstage">${code?"생각하는 중":"질문 이해하는 중"}</span> <span class="tsec"></span> <span class="typing"><i></i><i></i><i></i></span></span>${code?"":`<div class="peek" data-peek>위키 · 뉴스 · 법령 · 판례 · 우리말샘 · 통계에서 찾는 중</div>`}</div>`;
 const fb=`<div class="acts"><button data-act="copy" data-text="${esc(m.plain||"")}" aria-label="복사">${ic("copy",16)}</button><button data-act="like" aria-pressed="${m.like===1}" data-mid="${m.id}" aria-label="좋아요">${ic("thumb",16)}</button><button data-act="dislike" aria-pressed="${m.like===-1}" data-mid="${m.id}" aria-label="별로예요"><svg class="ic" viewBox="0 0 24 24" width="16" height="16" style="transform:rotate(180deg)">${P.thumb}</svg></button><span>${esc(m.meta||"")}</span></div>`;
 return `<div class="am"><div class="who">${WM(12)}</div>${m.html||`<p class="answer">${esc(m.plain||"").replace(/\n/g,"<br>")}</p>`}${fb}</div>`;}
@@ -252,13 +255,13 @@ async function agentLive(text,ag){const r=await modelCall({task:"agent",q:text,a
 if(r.ok&&r.d.answer)return{html:`<span class="status">${ic(ag.ic||"bot",14)} ${esc(ag.name)} 에이전트</span><p class="answer">${esc(r.d.answer).replace(/\n/g,"<br>")}</p>${modelNote}`,plain:r.d.answer,meta:ag.name};
 if(r.status===429||r.status===403)return{html:`<p class="answer">${esc(r.d.error||"지금은 답할 수 없어요")}</p>`,plain:r.d.error||"",meta:ag.name};return null;}
 function peekSet(t){document.querySelectorAll("[data-peek]").forEach(e=>e.innerHTML=t);}
-async function liveAnswer(q,hist){try{
+async function liveAnswer(q,hist,ctx){try{
 if(S.api.model&&S.mode==="Fonte")fetch("/api/wiki?q="+encodeURIComponent(q)).then(r=>r.json()).then(d=>{if(d&&d.found)peekSet("위키 보는 중: "+d.results.slice(0,3).map(x=>"<b>"+esc(x.title)+"</b>").join(" · ")+" <span class='muted'>· 뉴스·법령·판례도 찾는 중</span>");}).catch(()=>{});
 if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const m=q.match(/(\d{1,2})\s*월/),y=q.match(/(20\d{2})\s*년/);const now=new Date();const yy=y?y[1]:now.getFullYear(),mm=m?m[1]:now.getMonth()+1;
 const r=await fetch(`/api/holidays?year=${yy}&month=${mm}`);const d=await r.json();if(!r.ok)throw 0;
 const list=d.items.length?`<ul style="margin:6px 0 0;padding-left:20px">${d.items.map(i=>`<li>${i.date.slice(4,6)*1}월 ${i.date.slice(6)*1}일 · ${esc(i.name)}</li>`).join("")}</ul>`:"<br>이 달에는 공휴일이 없어요.";
 return{html:`<span class="status">${ic("globe",14)} 공공데이터 1개 찾음</span><p class="answer">${yy}년 ${mm}월 공휴일이에요 <span class="cite">[1]</span>.${list}</p><div class="srcs">${srcCard(1,"한국천문연구원 특일 정보","공공데이터포털 · data.go.kr","https://www.data.go.kr")}</div>`,plain:`${yy}년 ${mm}월 공휴일 ${d.items.length}개`,meta:modeOf(S.mode).lab+" · 공공데이터"};}
-if(S.api.model&&S.mode==="Fonte"&&S.fb&&S.fb.auth.currentUser){try{const tok=await S.fb.auth.currentUser.getIdToken();const cr=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify({q,hist,stream:true})});let cd;
+if(S.api.model&&S.mode==="Fonte"&&S.fb&&S.fb.auth.currentUser){try{const tok=await S.fb.auth.currentUser.getIdToken();const cr=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify({q,hist,stream:true,ctx:ctx||undefined})});let cd;
 if((cr.headers.get("content-type")||"").includes("ndjson")&&cr.body){cd={error:"끊겼어요"};const rd=cr.body.getReader(),dc=new TextDecoder();let bf="";for(;;){const {done,value}=await rd.read();if(value)bf+=dc.decode(value,{stream:true});let i;while((i=bf.indexOf("\n"))>=0){const ln=bf.slice(0,i).trim();bf=bf.slice(i+1);if(!ln)continue;let m;try{m=JSON.parse(ln);}catch(e){continue;}
 if(m.t==="refs"){peekSet(m.refs.length?"찾은 자료 읽는 중: "+m.refs.slice(0,4).map(x=>"<b>"+esc(x.db)+"</b> "+esc((x.title||"").slice(0,18))).join(" · ")+(m.refs.length>4?" 외 "+(m.refs.length-4)+"개":""):"찾은 자료가 없어요 · 일반 지식으로 답하는 중");}
 else if(m.t==="done")cd=m;else if(m.t==="error")cd={error:m.error};}if(done)break;}
@@ -266,7 +269,7 @@ if(!cd.answer)throw new Error(cd.error);}
 else cd=await cr.json();
 if(cr.ok&&cd.answer){const body=esc(cd.answer).replace(/\[(\d)\]/g,'<span class="cite">[$1]</span>').replace(/\n/g,"<br>");const lab=x=>x.db||"위키백과",card=x=>srcCard(x.n,x.title||lab(x),[lab(x),x.publisher,x.date].filter(Boolean).join(" · "),x.url);
 const head=`${cd.viaDb?`자료 ${cd.refs}개 찾음${cd.dbs&&cd.dbs.length?" ("+esc(cd.dbs.join("·"))+")":""}`:`위키백과 ${cd.refs}개 찾음`} · Fonte가 답했어요`;
-const all=cd.sources||[];return{html:(all.length?`<details class="srcsum"><summary class="status">${ic("globe",14)} ${head} <span class="chev">${ic("down",12)}</span></summary><div class="srcs" style="margin-top:8px">${all.map(x=>card(x)).join("")}</div></details>`:`<span class="status">${ic("globe",14)} ${head}</span>`)+`<p class="answer">${body}</p>${all.some(x=>x.cited)?`<div class="srcs">${all.filter(x=>x.cited).map(card).join("")}</div>`:""}`,plain:cd.answer,meta:modeOf(S.mode).lab+(cd.viaDb?" · 검색 DB":" · 위키백과")};}
+const all=cd.sources||[];return{html:(all.length?`<details class="srcsum"><summary class="status">${ic("globe",14)} ${head} <span class="chev">${ic("down",12)}</span></summary><div class="srcs" style="margin-top:8px">${all.map(x=>card(x)).join("")}</div></details>`:`<span class="status">${ic("globe",14)} ${head}</span>`)+`<p class="answer">${body}</p>${all.some(x=>x.cited)?`<div class="srcs">${all.filter(x=>x.cited).map(card).join("")}</div>`:""}`,plain:cd.answer,meta:modeOf(S.mode).lab+(cd.viaDb?" · 검색 DB":" · 위키백과"),src:all};}
 if(cr.status===429||cr.status===403)return{html:`<p class="answer">${esc(cd.error||"지금은 답할 수 없어요")}</p>`,plain:cd.error||"",meta:modeOf(S.mode).lab};}catch(e){}}
 const r=await fetch("/api/wiki?q="+encodeURIComponent(q));const d=await r.json();if(!r.ok||!d.found)return null;
 const top=d.results[0];const txt=(top.extract||"").split(/(?<=[.다요])\s+/).slice(0,S.mode==="Fonte"?4:2).join(" ");
@@ -275,9 +278,9 @@ return{html:`<span class="status">${ic("globe",14)} 위키백과 ${d.results.len
 function send(text,opt){text=text.trim();if(!text)return;const code=S.area==="code";
 let c=(route()==="chat"||route()==="code-chat")?curChat():null;
 if(!c){c={id:"c"+Date.now(),area:S.area,title:text.slice(0,24),msgs:[],temp:S.temp,created:Date.now(),kid:S.goccia,agent:route()==="agent"?S.curAgent:null};S.chats.unshift(c);S.cur=c.id;}
-c.msgs.push({role:"user",text});const am={id:"m"+Date.now(),role:"assistant",loading:true};c.msgs.push(am);S.menu=false;save();
+c.msgs.push({role:"user",text,att:(opt&&opt.att)||undefined});const am={id:"m"+Date.now(),role:"assistant",loading:true};c.msgs.push(am);S.menu=false;save();
 go(code?"code-chat":"chat");const useLive=!code&&S.api&&!c.agent&&!(opt&&opt.tool)&&!(S.goccia&&(S.study||S.kStudy===true||/죽고싶|자해|괴롭힘|때려|학대|무서워/.test(text.replace(/\s/g,""))));
-setTimeout(async()=>{const a=(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||text,opt.opt,opt.file):null)||(useLive&&await liveAnswer(text,c.msgs.slice(0,-2).filter(m=>!m.loading&&(m.role==="user"?m.text:m.plain)).slice(-4).map(m=>({r:m.role==="user"?"u":"a",t:String(m.role==="user"?m.text:m.plain).slice(0,300)}))))||(!code&&c.agent&&modelOn()&&await agentLive(text,agentById(c.agent)))||(code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},useLive?200:900);}
+setTimeout(async()=>{let fctx="";if(opt&&opt.ctxFile){try{fctx=((await readFileText(opt.ctxFile)).text||"").trim();}catch(er){}}const a=(opt&&opt.ctxFile&&!fctx?{html:`<p class="answer">${esc(opt.ctxFile.name||"파일")}에서 글자를 찾지 못했어요. LAGO는 아직 그림 자체는 보지 못하고 글자만 읽어요. 글자가 있는 선명한 사진이나 PDF·Word·텍스트 파일을 올려 주세요.</p>`,plain:"글자 없음",meta:"첨부"}:null)||(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||text,opt.opt,opt.file,opt.def):null)||(useLive&&await liveAnswer(text,c.msgs.slice(0,-2).filter(m=>!m.loading&&(m.role==="user"?m.text:m.plain)).slice(-4).map(m=>({r:m.role==="user"?"u":"a",t:String(m.role==="user"?m.text:m.plain).slice(0,300)})),fctx))||(fctx?{html:`<p class="answer">${esc((opt.ctxFile.name||"파일")+"에서 글자를 "+fctx.length.toLocaleString()+"자 읽었어요.")} 이 글을 보고 답하는 기능은 모델이 연결되는 베타 때 열려요. 지금은 ‘문서 요약’이나 ‘텍스트 추출’ 도구를 써 보세요.</p>`,plain:"첨부 글을 읽었어요",meta:"첨부"}:null)||(!code&&c.agent&&modelOn()&&await agentLive(text,agentById(c.agent)))||(code?codeAnswer(text):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},useLive?200:900);}
 
 /* ---------- projects ---------- */
 function vProjects(){return shell(`${topbar("",`<button class="btn pri sm tbnew" data-act="newproj" tabindex="-1">${ic("plus",15)} 새 프로젝트</button>`)}<div class="scroll"><div class="wrap page" style="max-width:1080px">
@@ -399,10 +402,14 @@ const f={};sents.forEach(x=>new Set(toks(x)).forEach(w=>f[w]=(f[w]||0)+1));
 const sc=sents.map((x,i)=>{const t=toks(x);const base=t.length?t.reduce((a,w)=>a+(f[w]>1?f[w]:0.3),0)/Math.pow(t.length,0.6):0;return {i,x,s:base*(i===0?1.35:i<3?1.1:1)*(x.length>260?0.7:1)};});
 const pick=[];for(const c of sc.slice().sort((a,b)=>b.s-a.s)){if(pick.length>=n)break;const ct=new Set(toks(c.x));if(pick.some(p=>{const pt=toks(p.x);const hit=pt.filter(w=>ct.has(w)).length;return hit/Math.max(1,Math.min(pt.length,ct.size))>0.7;}))continue;pick.push(c);}
 return {pick:pick.sort((a,b)=>a.i-b.i)};}
-async function toolAnswer(kind,text,opt,file){const t=TOOLS.find(x=>x.id===kind);
+async function toolAnswer(kind,text,opt,file,def){const t=kind==="custom"?{id:"custom",lab:def.name,ic:"bot"}:TOOLS.find(x=>x.id===kind);
 try{let body=text,how="";
 if(file){const r=await readFileText(file);body=r.text;how=r.how;}
 if(!body||!body.trim())return{html:`<span class="status">${ic(t.ic,14)} ${t.lab}</span><p class="answer">${file?"파일에서 글자를 찾지 못했어요. 글자가 없는 스캔 파일이거나 사진이 흐릴 수 있어요. 사진은 ‘이미지’로 올리면 글자 인식(OCR)을 해요.":"글이 비어 있어요."}</p>`,plain:"글자 없음",meta:t.lab};
+if(kind==="custom"){if(!modelOn())return{html:`<span class="status">${ic("bot",14)} ${esc(t.lab)}</span><p class="answer">이 도구는 모델이 연결되는 베타 때 열려요.</p>`,plain:"모델 미연결",meta:t.lab};
+ const mr=await modelCall({task:"agent",q:body.slice(0,500),ctx:body.slice(0,3000),agent:{name:def.name,instructions:def.ins+(opt?"\n선택한 옵션: "+opt:"")}});
+ if(mr.ok&&mr.d.answer)return{html:`<span class="status">${ic("bot",14)} ${esc(t.lab)}${opt?" · "+esc(opt):""}${how?" · "+esc(how):""}</span><p class="answer">${esc(mr.d.answer).replace(/\n/g,"<br>")}</p>${body.length>3000?`<p class="muted" style="margin:8px 0 0;font-size:12.5px">길어서 앞 3,000자만 처리했어요.</p>`:""}${modelNote}`,plain:mr.d.answer,meta:t.lab};
+ return{html:`<span class="status">${ic("bot",14)} ${esc(t.lab)}</span><p class="answer">${esc((mr.d&&mr.d.error)||"모델 서버에 연결하지 못했어요. 잠시 뒤에 다시 해 주세요.")}</p>`,plain:"실패",meta:t.lab};}
 if(kind==="extract"){const full=body.length>12000?body.slice(0,12000):body;
 return{html:`<span class="status">${ic(t.ic,14)} ${t.lab} · ${esc(how)} · ${body.length.toLocaleString()}자</span><p class="answer">${esc(file.name)}에서 글자를 뽑았어요.</p><pre class="toolout" style="white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:13px/1.65 var(--sans,inherit);margin:6px 0 0">${esc(full)}</pre>${body.length>12000?`<p class="muted" style="font-size:12.5px;margin:6px 0 0">길어서 앞 12,000자만 보여 드려요.</p>`:""}`,plain:full,meta:t.lab};}
 if(kind==="translate"||(kind==="summary"&&modelOn())){const mr=await modelCall(kind==="translate"?{task:"translate",text:body,lang:opt}:{task:"summary",text:body,len:opt});
@@ -512,18 +519,119 @@ sc.addEventListener("scroll",upd,{passive:true});upd();}
 /* ---------- render ---------- */
 let brandStage=null;
 function fixPops(){const c=document.querySelector(".composer");if(!c)return;const r=c.getBoundingClientRect();document.querySelectorAll(".pop").forEach(pp=>pp.classList.toggle("down",r.top<340&&innerHeight-r.bottom>r.top));}
+/* ---------- 첨부 · AI 도구 만들기·배포 · 대화 공유 ---------- */
+const fmtSize=n=>n<1024?n+"B":n<1048576?Math.round(n/1024)+"KB":(n/1048576).toFixed(1)+"MB";
+function makeThumb(file){return new Promise(res=>{if(!file||!/^image\//.test(file.type))return res("");const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{try{const k=Math.min(1,480/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext("2d").drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",0.7));}catch(e){res("");}URL.revokeObjectURL(u);};im.onerror=()=>{URL.revokeObjectURL(u);res("");};im.src=u;});}
+function attOf(file,raw,thumb){if(file)return{kind:/^image\//.test(file.type)?"image":"file",name:file.name,size:file.size,thumb:thumb||""};if(raw&&raw.length>120)return{kind:"text",name:"붙여 넣은 글",chars:raw.length,preview:raw.slice(0,140)};return null;}
+function attHtml(a){if(a.kind==="image")return a.thumb?`<figure class="attimg"><img src="${a.thumb}" alt="올린 이미지: ${esc(a.name)}"><figcaption>${esc(a.name)}${a.size?" · "+fmtSize(a.size):""}</figcaption></figure>`:`<div class="attcard">${ic("file",18)}<span><b>${esc(a.name)}</b><small>이미지${a.size?" · "+fmtSize(a.size):""}</small></span></div>`;
+if(a.kind==="text")return `<div class="attcard">${ic("news",18)}<span><b>${esc(a.name)} · ${(a.chars||0).toLocaleString()}자</b><small>${a.preview?esc(a.preview)+((a.chars||0)>140?"…":""):"붙여 넣은 글"}</small></span></div>`;
+return `<div class="attcard">${ic("file",18)}<span><b>${esc(a.name)}</b><small>파일${a.size?" · "+fmtSize(a.size):""}</small></span></div>`;}
+const userMsg=m=>`<div class="umw">${m.att?attHtml(m.att):""}${m.text?`<div class="um">${esc(m.text)}</div>`:""}</div>`;
+const myTool=id=>(S.myTools||[]).find(x=>x.id===id);
+function toolDef(id){if(id&&id.startsWith("u:")){const d=myTool(id.slice(2));return d?{id,lab:d.name,ic:"bot",c:"#5B6CC9",def:d,opts:d.opts||[],input:d.input}:null;}const t=TOOLS.find(x=>x.id===id);return t?{id,lab:t.lab,ic:t.ic,c:t.c,opts:t.id==="translate"?["영어","한국어","일본어","중국어","스페인어"]:t.id==="summary"?["3줄","5줄","한 문단"]:[],input:t.id==="extract"?"file":"both"}:null;}
+function plusPop(){const code=S.area==="code";const tools=code||S.goccia?"":`<div class="hint" style="padding:8px 10px 4px">AI 도구</div>${TOOLS.map(t=>`<button type="button" class="opt" data-seltool="${t.id}"><span class="mi" style="background:${t.c}22;color:${t.c}">${ic(t.ic,18)}</span><span class="grow"><b>${t.lab}</b></span></button>`).join("")}${(S.myTools||[]).map(t=>`<button type="button" class="opt" data-seltool="u:${t.id}"><span class="mi" style="background:#5B6CC922;color:#5B6CC9">${ic("bot",18)}</span><span class="grow"><b>${esc(t.name)}</b><small>내 도구</small></span></button>`).join("")}<div style="height:1px;background:#EEF2F8;margin:6px 4px"></div><button type="button" class="opt" data-go="tool-new"><span class="mi" style="background:var(--mist);color:var(--blue)">${ic("plus",18)}</span><span class="grow"><b>AI 도구 만들기</b><small>내 지시문으로 나만의 도구를 만들어요</small></span></button><button type="button" class="opt" data-go="tools"><span class="mi" style="background:var(--mist);color:var(--blue)">${ic("grid",18)}</span><span class="grow"><b>도구 모두 보기 · 배포</b></span></button>`;
+return `<div class="pop plusp" role="dialog" aria-label="첨부와 AI 도구" style="left:8px;right:auto"><button type="button" class="opt" data-act="pickFile"><span class="mi" style="background:var(--mist);color:var(--blue)">${ic("clip",18)}</span><span class="grow"><b>사진·파일 올리기</b><small>이미지 · PDF · Word · 텍스트 (15MB까지)</small></span></button>${tools}</div>`;}
+function selRow(){const a=S.att,t=S.selTool&&toolDef(S.selTool);if(!a&&!t)return "";
+const opt=t&&t.opts.length?`<select id="selopt" class="selopt" aria-label="${t.id==="translate"?"번역할 언어":t.id==="summary"?"요약 길이":"옵션"}">${t.opts.map(o=>`<option ${(S.selOpt||t.opts[0])===o?"selected":""}>${esc(o)}</option>`).join("")}</select>`:"";
+return `<div class="selrow">${t?`<span class="selchip" style="--c:${t.c}">${ic(t.ic,14)}<b>${esc(t.lab)}</b><button type="button" class="x" data-act="toolClear" aria-label="도구 선택 해제">${ic("x",12)}</button></span>${opt}`:""}${a?`<span class="selchip att">${a.kind==="image"&&a.thumb?`<img src="${a.thumb}" alt="">`:ic("file",14)}<b>${esc(a.name)}</b><small>${fmtSize(a.size)}</small><button type="button" class="x" data-act="attClear" aria-label="첨부 지우기">${ic("x",12)}</button></span>`:""}</div>`;}
+async function runTool(k,o){const raw=(o.raw||"").trim(),file=o.file||null,opt=o.opt||"",def=o.def||null;
+const lab=def?def.name:TOOLS.find(x=>x.id===k).lab;const thumb=o.thumb!=null?o.thumb:(file?await makeThumb(file):"");const att=attOf(file,raw,thumb);
+let disp=k==="extract"?"글자를 뽑아 줘":k==="translate"?`${opt}로 번역해 줘`:k==="summary"?`${opt}로 요약해 줘`:(opt?opt+" · ":"")+(def?def.name:"")+" 실행";
+if(!att&&raw)disp=k==="custom"?(opt?opt+" · ":"")+raw:disp+": "+raw;
+if(!o.keep){S.area="talk";S.cur=null;S.temp=false;}
+send(disp,{tool:k,raw,opt,file,def,att});
+const c=curChat();if(c&&c.msgs.length<=2){c.title=lab+" · "+(file?file.name:raw.slice(0,16)||lab);}save();}
+function composerSend(text){text=(text||"").trim();const tid=S.selTool,at=S.att,q=$("#q");
+if(!tid&&!at){if(q)q.value="";send(text);return;}
+if(tid){const d=toolDef(tid);if(!d){S.selTool=null;render();return;}if(!text&&!at){toast("글을 쓰거나 파일을 올려 주세요");return;}
+ const k=tid.startsWith("u:")?"custom":tid;if(k==="translate"&&!modelOn()){toast("번역은 모델이 연결되는 베타 때 열려요");return;}
+ const opt=S.selOpt||d.opts[0]||"";S.selTool=null;S.att=null;S.selOpt=null;if(q)q.value="";
+ runTool(k,{raw:text,opt,file:at?at.file:null,def:k==="custom"?d.def:null,keep:true,thumb:at?at.thumb:""});return;}
+S.att=null;if(q)q.value="";send(text||"이 파일 내용을 알려 줘",{ctxFile:at.file,att:{kind:at.kind,name:at.name,size:at.size,thumb:at.thumb}});}
+async function pickedFile(f){if(!f)return;if(f.size>15*1024*1024){toast("파일이 너무 커요. 15MB 이하로 올려 주세요");return;}
+S.att={file:f,name:f.name,size:f.size,kind:/^image\//.test(f.type)?"image":"file",thumb:""};render();const th=await makeThumb(f);if(S.att&&S.att.file===f&&th){S.att.thumb=th;render();}}
+/* 내 AI 도구 */
+const TOOL_INPUT=[["text","글만 붙여 넣기"],["file","파일만 올리기"],["both","글 또는 파일"]];
+function vTools(){const mine=S.myTools||[];const pm=S.pubTool&&myTool(S.pubTool);
+return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:900px;display:grid;gap:16px">
+<div class="row phead"><div class="grow"><h1 style="margin:0">AI 도구</h1><p class="muted" style="margin:4px 0 0">글이나 파일을 넣으면 정해 둔 일을 해 주는 도구예요. 직접 만들고, 링크로 배포할 수도 있어요.</p></div><button class="btn pri hbtn" data-act="newTool">${ic("plus",16)} 도구 만들기</button></div>
+<h2 style="margin:6px 0 0;font-size:16px">내 도구</h2>
+${mine.length?mine.map(t=>`<div class="card" style="padding:14px 16px;display:grid;gap:8px"><div class="row" style="gap:10px;flex-wrap:wrap"><span class="svcico" style="background:#5B6CC9">${ic("bot",18)}</span><div class="grow" style="min-width:150px"><b>${esc(t.name)}</b><div class="muted" style="font-size:13px">${esc(t.desc||"설명 없음")}</div></div>${t.pub?`<span class="tag" style="background:#E8F5EC;color:#1F8A4C">배포 중</span>`:""}</div>
+<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm pri" data-ctool="${t.id}">열기</button><button class="btn sm" data-act="toolEdit" data-id="${t.id}">${ic("pen",14)} 수정</button><button class="btn sm" data-act="toolPubOpen" data-id="${t.id}">${ic("share",14)} ${t.pub?"배포 관리":"배포하기"}</button>${S.delTool===t.id?`<span class="muted" style="font-size:13px">정말 지울까요?</span><button class="btn sm" style="color:#B3261E" data-act="toolDel" data-id="${t.id}">지우기</button><button class="btn sm" data-act="toolDelNo">취소</button>`:`<button class="btn sm" data-act="toolDel" data-id="${t.id}">${ic("trash",14)} 지우기</button>`}</div></div>`).join(""):`<div class="card" style="padding:18px"><p class="muted" style="margin:0 0 10px">아직 만든 도구가 없어요. 예: 맞춤법 검사기, 회의록 정리, 영어 일기 고치기…</p><button class="btn sm pri" data-act="newTool">${ic("plus",14)} 첫 도구 만들기</button></div>`}
+<h2 style="margin:10px 0 0;font-size:16px">기본 도구</h2>
+<div class="grid3">${TOOLS.map(t=>`<button class="card pcard" data-go="${t.route}"><span class="svcico" style="background:${t.c}">${ic(t.ic,18)}</span><b>${t.lab}</b><span class="muted" style="font-size:13px">${t.d}</span></button>`).join("")}</div></div></div>${pm?pubModal(pm):""}`);}
+function vToolNew(){const e=S.editTool&&myTool(S.editTool),d=e||S.toolDraft||{};
+return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:680px;display:grid;gap:16px">
+<div class="row" style="gap:10px"><button class="btn sm" data-go="tools">${ic("back",14)} AI 도구</button></div>
+<div><h1 style="margin:0">${e?"도구 수정":"AI 도구 만들기"}</h1><p class="muted" style="margin:4px 0 0">무슨 일을 하는 도구인지 적으면, 쓸 때마다 그 지시대로 LAGO가 처리해요.</p></div>
+<form id="toolNewForm" class="card" style="display:grid;gap:14px" novalidate>
+<label class="fld">이름<input id="tnN" maxlength="30" value="${esc(d.name||"")}" placeholder="예: 맞춤법 검사기" autocomplete="off"></label>
+<label class="fld">한 줄 설명 (선택)<input id="tnD" maxlength="120" value="${esc(d.desc||"")}" placeholder="예: 틀린 맞춤법과 띄어쓰기를 고쳐 줘요" autocomplete="off"></label>
+<label class="fld">지시문<textarea id="tnI" rows="6" maxlength="1500" style="resize:vertical" placeholder="예: 입력한 글의 맞춤법과 띄어쓰기만 고쳐서 돌려줘. 내용은 바꾸지 말고, 고친 부분을 마지막에 한 줄로 알려 줘.">${esc(d.ins||"")}</textarea></label>
+<label class="fld">무엇을 넣나요<select id="tnT">${TOOL_INPUT.map(x=>`<option value="${x[0]}" ${(d.input||"both")===x[0]?"selected":""}>${x[1]}</option>`).join("")}</select></label>
+<label class="fld">선택지 (선택, 쉼표로)<input id="tnO" maxlength="120" value="${esc((d.opts||[]).join(", "))}" placeholder="예: 존댓말, 반말" autocomplete="off"></label>
+<div class="note">${ic("info",16)}<span>도구는 Fonte 모델이 지시문대로 답해요. 따로 학습한 일이 아니어서 틀릴 수 있어요. 지시문은 1,500자, 한 번에 넣는 글은 3,000자까지예요.</span></div>
+<p class="err" id="tnerr" role="alert"></p><div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" type="button" data-go="tools">취소</button><button class="btn pri" type="submit">${e?"저장":"만들기"}</button></div></form></div></div>`);}
+function vToolMy(){const d=myTool(S.curTool);if(!d){go("tools",true);return "";}const dr=S.toolIn||{};const inp=d.input||"both";
+return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:720px;display:grid;gap:16px">
+<div class="row" style="gap:10px"><button class="btn sm" data-go="tools">${ic("back",14)} AI 도구</button></div>
+<div class="row" style="gap:12px"><span class="svcico" style="background:#5B6CC9">${ic("bot",20)}</span><div class="grow"><h1 style="margin:0">${esc(d.name)}</h1><span class="muted" style="font-size:13.5px">${esc(d.desc||"")}</span></div></div>
+${modelOn()?"":`<div class="note">${ic("info",16)}<span>도구는 LAGO 모델이 연결되는 <b>베타</b> 때 열려요. 지금은 만들고 다듬어 둘 수 있어요.</span></div>`}
+<form id="toolMyForm" class="card" style="display:grid;gap:14px" novalidate>${inp!=="file"?`<label class="fld">글<textarea id="tmT" rows="7" maxlength="3000" style="resize:vertical" placeholder="여기에 글을 붙여 넣어 주세요">${esc(dr.text||"")}</textarea></label>`:""}
+${inp!=="text"?`<label class="fld">${inp==="both"?"또는 파일 올리기":"파일 올리기"}<input id="tmF" type="file" accept=".pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.srt,.log,image/*"></label>`:""}
+${(d.opts||[]).length?`<label class="fld">옵션<select id="tmO">${d.opts.map(o=>`<option>${esc(o)}</option>`).join("")}</select></label>`:""}
+<p class="err" id="tmerr" role="alert"></p><div class="row" style="justify-content:flex-end"><button class="btn pri" ${modelOn()?"":"disabled"}>실행하기</button></div></form></div></div>`);}
+function pubModal(t){const p=t.pub,link=p?location.origin+"/t/"+p.id:"";
+return `<div class="tempask" role="dialog" aria-label="도구 배포" data-act="pubClose"><div class="card sharecard" data-stop="1"><div class="row"><b style="font-size:17px">도구 배포</b><span class="grow"></span><button class="iconbtn" data-act="pubClose" aria-label="닫기">${ic("x",18)}</button></div>
+<div class="shareprev"><b>${esc(t.name)}</b><span class="muted" style="font-size:12.5px">${esc(t.desc||"설명 없음")}</span></div>
+<span class="muted" style="font-size:13px">링크를 받은 사람은 <b>로그인하면</b> 이 도구를 쓸 수 있어요. 지시문은 보이지 않고, 사용량은 쓰는 사람의 하루 한도에서 빠져요. 도구를 고치면 ‘업데이트’를 눌러 반영해 주세요.</span>
+${p?`<div class="row"><input readonly value="${link}" id="pubLink" aria-label="도구 링크" style="font:13px var(--mono)"><button class="btn sm pri" data-act="copy" data-text="${link}">${ic("copy",14)} 복사</button></div>`:""}
+<div class="prow" style="padding:6px 0;border:0"><span class="grow" style="font-size:13px">만든 사람 이름 표시</span><button class="switch" role="switch" aria-checked="${!!t.showName}" data-act="pubName" data-id="${t.id}"></button></div>
+<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn pri sm" data-act="pubDo" data-id="${t.id}" ${S.pubBusy?"disabled":""}>${p?"업데이트":"배포하기"}</button>${p?`<button class="btn sm" data-act="pubOff" data-id="${t.id}" ${S.pubBusy?"disabled":""}>배포 내리기</button>`:""}</div></div></div>`;}
+async function pubFetch(path,body){if(!PATHMODE||!S.fb||!S.user||!S.user.uid)throw new Error("로그인한 실제 서비스에서만 쓸 수 있어요");const tok=await S.fb.auth.currentUser.getIdToken();const r=await fetch(path,{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"처리하지 못했어요");return j;}
+async function pubDo(id){const t=myTool(id);if(!t)return;S.pubBusy=true;render();try{const j=await pubFetch("/api/tools/publish",{id:t.pub&&t.pub.id,name:t.name,desc:t.desc,ins:t.ins,input:t.input,opts:t.opts,showName:!!t.showName,ownerName:S.user.name});t.pub={id:j.id};save();toast(t.pub?"배포했어요":"");}catch(e){toast(e.message);}S.pubBusy=false;render();}
+async function pubOff(id){const t=myTool(id);if(!t||!t.pub)return;S.pubBusy=true;render();try{await pubFetch("/api/tools/unpublish",{id:t.pub.id});t.pub=null;save();toast("배포를 내렸어요. 링크로 더 이상 쓸 수 없어요");}catch(e){toast(e.message);}S.pubBusy=false;render();}
+/* 배포된 도구 열기 (/t/아이디) */
+function vToolPub(){const id=S.tpId,st=S.tp&&S.tp.id===id?S.tp:null;if(!st){S.tp={id,loading:true};fetch("/api/tools/"+encodeURIComponent(id)).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(x=>{S.tp={id,data:x.ok?x.j:null,err:x.ok?"":x.j.error||"없는 도구예요"};render();}).catch(()=>{S.tp={id,err:"불러오지 못했어요"};render();});}
+const t=st&&st.data;let body="";
+if(!st||st.loading)body=`<p class="muted">불러오는 중…</p>`;
+else if(!t)body=`<div class="card"><b>${esc(st.err||"열 수 없는 도구예요")}</b><p class="muted" style="margin:6px 0 0">링크가 바뀌었거나 만든 사람이 배포를 내렸을 수 있어요.</p></div>`;
+else{const inp=t.input||"both";const dr=S.tpIn||{};
+body=`<div><h1 style="margin:0">${esc(t.name)}</h1><p class="muted" style="margin:4px 0 0">${esc(t.desc||"")}${t.owner?` · 만든 사람 ${esc(t.owner)}`:""}</p></div>
+${S.user?(modelOn()?"":`<div class="note">${ic("info",16)}<span>지금은 모델이 연결되어 있지 않아요.</span></div>`):`<div class="note">${ic("info",16)}<span>이 도구를 쓰려면 로그인이 필요해요.</span><button class="btn sm pri" data-act="pubLogin" style="margin-left:auto">로그인</button></div>`}
+<form id="toolPubForm" class="card" style="display:grid;gap:14px" novalidate>${inp!=="file"?`<label class="fld">글<textarea id="tpT" rows="7" maxlength="3000" style="resize:vertical" placeholder="여기에 글을 붙여 넣어 주세요">${esc(dr.text||"")}</textarea></label>`:""}
+${inp!=="text"?`<label class="fld">${inp==="both"?"또는 파일 올리기":"파일 올리기"}<input id="tpF" type="file" accept=".pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.srt,.log,image/*"></label>`:""}
+${(t.opts||[]).length?`<label class="fld">옵션<select id="tpO">${t.opts.map(o=>`<option>${esc(o)}</option>`).join("")}</select></label>`:""}
+<p class="err" id="tperr" role="alert"></p><div class="row" style="justify-content:flex-end"><button class="btn pri" ${S.user&&modelOn()?"":"disabled"}>${S.tpBusy?"처리 중…":"실행하기"}</button></div></form>
+${S.tpOut?`<div class="card" style="display:grid;gap:8px"><div class="row"><b>결과</b><span class="grow"></span><button class="btn sm" data-act="copy" data-text="${esc(S.tpOut)}">${ic("copy",14)} 복사</button></div><p class="answer" style="margin:0">${esc(S.tpOut).replace(/\n/g,"<br>")}</p><p class="muted" style="margin:0;font-size:12.5px">AI가 만든 결과라 틀릴 수 있어요. 중요한 내용은 확인해 주세요.</p></div>`:""}`;}
+return pubShell(`<div style="display:grid;gap:16px">${body}</div>`);}
+function pubShell(inner){return `<div class="pubpage"><header class="pubtop"><a href="/" class="pubbrand" aria-label="LAGO 홈">${WM(22)}</a><span class="grow"></span><a class="btn sm" href="/">${S.user?"내 대화로":"LAGO 열기"}</a></header><main class="wrap pubmain">${inner}</main></div>`;}
+/* 공유된 대화 보기 (/s/아이디) */
+function vShareView(){const id=S.svId,st=S.sv&&S.sv.id===id?S.sv:null;if(!st){S.sv={id,loading:true};fetch("/api/share/"+encodeURIComponent(id)).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(x=>{S.sv={id,data:x.ok?x.j:null,err:x.ok?"":x.j.error||"없는 링크예요"};if(x.ok)document.title="LAGO · "+x.j.title;render();}).catch(()=>{S.sv={id,err:"불러오지 못했어요"};render();});}
+const d=st&&st.data;let body="";
+if(!st||st.loading)body=`<p class="muted">불러오는 중…</p>`;
+else if(!d)body=`<div class="card"><b>${esc(st.err||"열 수 없는 링크예요")}</b><p class="muted" style="margin:6px 0 0">공유가 끝났거나 링크가 잘못됐을 수 있어요.</p></div>`;
+else{const dt=new Date(d.upd||d.at).toLocaleDateString("ko-KR");
+body=`<div><h1 style="margin:0">${esc(d.title)}</h1><p class="muted" style="margin:4px 0 0;font-size:13px">${d.name?esc(d.name)+" · ":""}${dt} 공유 · 읽기 전용</p></div>
+<div class="thread" style="display:grid;gap:16px">${d.msgs.map(m=>m.r==="u"?`<div class="umw">${m.att?attHtml({kind:m.att.kind,name:m.att.name,chars:m.att.chars}):""}<div class="um">${esc(m.t)}</div></div>`:`<div class="am"><div class="who">${WM(12)}</div><p class="answer">${esc(m.t).replace(/\n/g,"<br>")}</p>${(m.src||[]).length?`<div class="srcs">${m.src.map(x=>srcCard(x.n,x.title||x.db,[x.db,x.publisher,x.date].filter(Boolean).join(" · "),x.url)).join("")}</div>`:""}</div>`).join("")}</div>
+<p class="muted" style="font-size:12.5px;margin:6px 0 0">이 대화는 LAGO 사용자가 공유한 내용이에요. AI 답변은 틀릴 수 있어요.</p>
+<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="grow" style="min-width:180px">LAGO는 찾아 읽고 출처와 함께 답하는 AI예요.</span><a class="btn pri sm" href="/">LAGO 써 보기</a></div>`;}
+return pubShell(`<div style="display:grid;gap:16px">${body}</div>`);}
+function sharePayload(c){const so=c.shareSrc!==false;return{id:c.shareId,title:c.title,showName:!!c.shareName,name:S.user.name,msgs:c.msgs.filter(m=>!m.loading&&(m.role==="user"?m.text:m.plain)).map(m=>m.role==="user"?{r:"u",t:m.text,att:m.att?{kind:m.att.kind,name:m.att.name,chars:m.att.chars}:undefined}:{r:"a",t:m.plain,src:so?(m.src||[]).map(x=>({n:x.n,title:x.title,db:x.db,url:x.url,date:x.date,publisher:x.publisher})):[]})};}
+async function shareDo(c,on){if(c.kid){toast("아이 계정의 대화는 공유할 수 없어요");return;}if(c.temp){toast("임시 대화는 공유할 수 없어요");return;}S.shareBusy=true;render();
+try{if(on){const j=await pubFetch("/api/share",sharePayload(c));c.shareId=j.id;c.shared=true;toast(c.shareUpd?"링크를 업데이트했어요":"공유 링크를 만들었어요");}else{if(c.shareId)await pubFetch("/api/share/delete",{id:c.shareId});c.shared=false;c.shareId=null;toast("공유를 멈췄어요. 링크로 더 이상 볼 수 없어요");}save();}catch(e){toast(e.message);}S.shareBusy=false;S.shareUpd=false;render();}
 function render(){const r=route();
 if(S.booting&&!S.user){$("#app").innerHTML=`<div class="splash" role="status" aria-label="불러오는 중">${WM(30)}</div>`;return;}
 if(S.banned&&S.user){$("#app").innerHTML=vBanned();return;}
 if(!S.user&&!PUBLIC.includes(r)){if(PATHMODE&&!S.after)S.after=location.pathname;go("login",true);return;}
 if(S.user&&(r==="login"||r==="join")){go("home",true);return;}
-if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-extract","tool-summary"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");go("home",true);return;}
+if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-extract","tool-summary","tools","tool-new","tool-my","tool-pub"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");go("home",true);return;}
 if(r==="code"||r==="code-chat"||r==="code-folder")S.area="code";else if(["home","chat","projects","project","agents","agent","agent-new"].includes(r))S.area="talk";
-const v={"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
-const html=v();if(!html)return;const rk=location.pathname+location.hash,oldSc=document.querySelector(".main > .scroll"),keepTop=oldSc&&S.rk===rk?oldSc.scrollTop:0;S.rk=rk;$("#app").innerHTML=html;if(keepTop){const ns=document.querySelector(".main > .scroll");if(ns&&!$("#sc"))ns.scrollTop=keepTop;}
+const v={tools:vTools,"tool-new":vToolNew,"tool-my":vToolMy,"tool-pub":vToolPub,"share-view":vShareView,"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
+const html=v();if(!html)return;const rk=location.pathname+location.hash,oldSc=document.querySelector(".main > .scroll"),keepTop=oldSc&&S.rk===rk?oldSc.scrollTop:0,qv=S.rk===rk&&$("#q")?$("#q").value:"";S.rk=rk;$("#app").innerHTML=html;if(keepTop){const ns=document.querySelector(".main > .scroll");if(ns&&!$("#sc"))ns.scrollTop=keepTop;}
 const sc=$("#sc");if(sc)sc.scrollTop=sc.scrollHeight;
 if($("#bc"))startBrand();
-const q=$("#q");if(q){q.addEventListener("input",()=>{q.style.height="auto";q.style.height=Math.min(180,q.scrollHeight)+"px";});q.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();send(q.value);}});}
+const q=$("#q");if(q){if(qv){q.value=qv;q.style.height="auto";q.style.height=Math.min(180,q.scrollHeight)+"px";}q.addEventListener("input",()=>{q.style.height="auto";q.style.height=Math.min(180,q.scrollHeight)+"px";});q.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();composerSend(q.value);}});}
 armScroll();document.title=r==="login"?"LAGO 로그인":(PATHMODE?"LAGO":"LAGO 앱 미리보기");
 if(r==="agent-new")["an","ad","ai","as0","as1","as2"].forEach(id=>{const el=$("#"+id);el&&el.addEventListener("input",()=>{readDraft();$("#agPrev").innerHTML=agentPreview(S.draft);});});}
 
@@ -547,7 +655,9 @@ if(d.tsw){const t=S.tasks.find(x=>x.id===d.tsw);if(t){t.on=t.on===false;save();r
 if(d.ptab){S.ptab=d.ptab;S.confirm=null;S.renaming=false;render();return;}
 if(d.cmenu){if(S.cmenu===d.cmenu&&S.cmenuAt===d.at)S.cmenu=null;else{S.cmenu=d.cmenu;S.cmenuAt=d.at;}render();return;}
 if(d.unpin){S.pinned=S.pinned.filter(x=>x!==d.unpin);save();render();toast("고정을 풀었어요");return;}
-if(d.shareset){const c=S.chats.find(x=>x.id===S.share);if(c){c.shared=d.shareset==="on";save();render();toast(c.shared?"공유 링크를 만들었어요":"공유를 멈췄어요. 링크로 더 이상 볼 수 없어요");}return;}
+if(d.seltool){S.selTool=d.seltool;S.selOpt=null;S.plus=false;render();const qq=$("#q");if(qq)qq.focus();return;}
+if(d.ctool){S.curTool=d.ctool;S.flyout=false;S.toolIn=null;go("tool-my");return;}
+if(d.shareset){const c=S.chats.find(x=>x.id===S.share);if(c&&!S.shareBusy&&(d.shareset==="on")!==!!c.shared)shareDo(c,d.shareset==="on");return;}
 if(d.sharesrc){const c=S.chats.find(x=>x.id===S.share);c.shareSrc=c.shareSrc===false;save();render();return;}
 if(d.sharename){const c=S.chats.find(x=>x.id===S.share);c.shareName=!c.shareName;save();render();return;}
 if(d.gtab){S.gtab=d.gtab;S.gview=null;S.confirm=null;render();return;}
@@ -573,6 +683,21 @@ case"new":S.cur=null;S.preview=false;S.drawer=false;go(S.area==="code"?"code":"h
 case"search":toast("검색은 실제 서비스에서 대화 제목과 내용을 찾아 줘요");break;
 case"term":toast(S.goccia?"아이 계정에서는 터미널 모드를 쓸 수 없어요":"터미널 모드는 LAGO Desktop에서 쓸 수 있어요");break;
 case"attach":toast("파일 첨부는 실제 서비스에서 연결돼요");break;
+case"plus":S.plus=!S.plus;S.menu=false;S.conn=false;render();break;
+case"pickFile":S.plus=false;render();{const ci=$("#cfile");if(ci)ci.click();}break;
+case"toolClear":S.selTool=null;S.selOpt=null;render();break;
+case"attClear":S.att=null;render();break;
+case"newTool":S.editTool=null;S.toolDraft=null;go("tool-new");break;
+case"toolEdit":S.editTool=d.id;go("tool-new");break;
+case"toolDel":if(S.delTool===d.id){const t=myTool(d.id);if(t&&t.pub)pubFetch("/api/tools/unpublish",{id:t.pub.id}).catch(()=>{});S.myTools=(S.myTools||[]).filter(x=>x.id!==d.id);S.delTool=null;save();toast("도구를 지웠어요");}else S.delTool=d.id;render();break;
+case"toolDelNo":S.delTool=null;render();break;
+case"toolPubOpen":S.pubTool=d.id;render();break;
+case"pubClose":if(e.target.closest("[data-stop]")&&!e.target.closest('[data-act="pubClose"]'))break;S.pubTool=null;render();break;
+case"pubName":{const t=myTool(d.id);if(t){t.showName=!t.showName;save();render();}break;}
+case"pubDo":pubDo(d.id);break;
+case"pubOff":pubOff(d.id);break;
+case"pubLogin":S.after=location.pathname;go("login");break;
+case"shareUpdate":{const c=S.chats.find(x=>x.id===S.share);if(c){S.shareUpd=true;shareDo(c,true);}break;}
 case"websw":S.web=(S.web+1)%3;save();render();break;
 case"menu":S.conn=false;S.menu=!S.menu;render();break;
 case"drawer":S.drawer=!S.drawer;render();break;
@@ -641,6 +766,8 @@ case"unguardYes":S.guardian=null;S.confirm=null;save();toast("보호자 등록�
 case"revokeYes":S.confirm=null;toast("동의를 철회했어요. 아이 계정이 삭제돼요 (미리보기)");render();break;
 }});
 document.addEventListener("change",e=>{const t=e.target;
+if(t.id==="cfile"){const f=t.files&&t.files[0];t.value="";pickedFile(f);return;}
+if(t.id==="selopt"){S.selOpt=t.value;return;}
 if(t.dataset.todo!=null){S.todos[+t.dataset.todo].d=t.checked;render();return;}
 if(t.id==="sMode"){S.mode=t.value;save();toast("기본 모드를 바꿨어요");}
 if(t.id==="sThink"){S.think=+t.value;save();}
@@ -652,7 +779,7 @@ if((e.ctrlKey||e.metaKey)&&e.key===","&&S.user&&!S.goccia){e.preventDefault();go
 if(e.key==="Escape"&&(S.cmenu||S.share||S.renameChat||S.delChat)){S.cmenu=null;S.share=null;S.renameChat=null;S.delChat=null;S.flyout=false;render();return;}
 if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&S.user){e.preventDefault();S.cur=null;go(S.area==="code"?"code":"home");}});
 document.addEventListener("submit",async e=>{const f=e.target;e.preventDefault();
-if(f.id==="composer"){send($("#q").value);return;}
+if(f.id==="composer"){composerSend($("#q").value);return;}
 if(f.id==="todoForm"){const v=$("#todoIn").value.trim();if(v){S.todos.push({t:v,d:false});render();setTimeout(()=>$("#todoIn")&&$("#todoIn").focus(),0);}return;}
 if(f.id==="loginForm"){const em=$("#le").value.trim().toLowerCase(),pw=$("#lp").value,err=$("#lerr");
  if(!/^\S+@\S+\.\S+$/.test(em)){err.textContent="이메일 주소를 확인해 주세요.";$("#le").focus();return;}
@@ -679,9 +806,14 @@ if(f.id==="toolForm"){const k=f.dataset.tool,raw=($("#ti")?$("#ti").value.trim()
  if(k==="translate"&&!modelOn()){err.textContent="번역은 모델이 연결되는 베타 때 열려요.";return;}
  if(!raw&&!fl){err.textContent=k==="extract"?"파일을 올려 주세요.":"글을 붙여 넣거나 파일을 올려 주세요.";return;}
  if(fl&&fl.size>15*1024*1024){err.textContent="파일이 너무 커요. 15MB 이하로 올려 주세요.";return;}
- err.textContent="";S.toolIn={text:raw,opt:op};const lab=TOOLS.find(x=>x.id===k).lab;const nm=fl?fl.name:raw.slice(0,16);
- const q=k==="extract"?`이 파일에서 글자를 뽑아 줘: ${fl.name}`:k==="translate"?`${op}로 번역해 줘: ${raw.slice(0,60)}`:`${op}로 요약해 줘: ${fl?fl.name:raw.slice(0,60)}`;
- S.area="talk";S.cur=null;S.temp=false;send(q,{tool:k,raw:fl?fl.name:raw,opt:op,file:fl||null});if(S.chats[0])S.chats[0].title=lab+" · "+nm;save();return;}
+ err.textContent="";S.toolIn={text:raw,opt:op};runTool(k,{raw,opt:op,file:fl||null});return;}
+if(f.id==="toolNewForm"){const nm=$("#tnN").value.trim(),ins=$("#tnI").value.trim(),err=$("#tnerr");if(!nm){err.textContent="이름을 입력해 주세요.";$("#tnN").focus();return;}if(!ins){err.textContent="지시문을 적어 주세요.";$("#tnI").focus();return;}
+ const o={name:nm,desc:$("#tnD").value.trim(),ins,input:$("#tnT").value,opts:$("#tnO").value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,8)};
+ if(S.editTool){const t=myTool(S.editTool);Object.assign(t,o);S.curTool=t.id;toast(t.pub?"저장했어요. 배포한 도구는 ‘배포 관리’에서 업데이트해 주세요":"저장했어요");}else{const t={...o,id:"u"+Date.now().toString(36)};S.myTools=[t,...(S.myTools||[])];S.curTool=t.id;toast("도구를 만들었어요");}
+ S.editTool=null;S.toolDraft=null;save();go("tools");return;}
+if(f.id==="toolMyForm"){const d=myTool(S.curTool),raw=($("#tmT")?$("#tmT").value.trim():""),fl=$("#tmF")&&$("#tmF").files&&$("#tmF").files[0],err=$("#tmerr");if(!d)return;if(!raw&&!fl){err.textContent="글을 넣거나 파일을 올려 주세요.";return;}if(fl&&fl.size>15*1024*1024){err.textContent="파일이 너무 커요. 15MB 이하로 올려 주세요.";return;}err.textContent="";S.toolIn={text:raw};runTool("custom",{raw,opt:$("#tmO")?$("#tmO").value:"",file:fl||null,def:d});return;}
+if(f.id==="toolPubForm"){const err=$("#tperr");if(!S.user){err.textContent="로그인이 필요해요.";return;}if(S.tpBusy)return;const raw=($("#tpT")?$("#tpT").value.trim():""),fl=$("#tpF")&&$("#tpF").files&&$("#tpF").files[0];if(!raw&&!fl){err.textContent="글을 넣거나 파일을 올려 주세요.";return;}if(fl&&fl.size>15*1024*1024){err.textContent="파일이 너무 커요. 15MB 이하로 올려 주세요.";return;}
+ err.textContent="";S.tpBusy=true;S.tpOut="";S.tpIn={text:raw};render();let body=raw;try{if(fl){const r=await readFileText(fl);body=(r.text||"").trim();}if(!body)throw new Error("글자를 찾지 못했어요");const j=await pubFetch("/api/tools/run",{id:S.tpId,text:body.slice(0,3000),opt:$("#tpO")?$("#tpO").value:""});S.tpOut=j.answer||"";}catch(er){S.tpOut="";setTimeout(()=>{const e2=$("#tperr");if(e2)e2.textContent=er.message;},0);}S.tpBusy=false;render();return;}
 if(f.id==="mcpForm"){const u=$("#mu").value.trim(),err=$("#merr");if(!/^https:\/\/[^\s/]+\.[^\s]+$/.test(u)){err.textContent="https://로 시작하는 서버 주소를 넣어 주세요.";return;}if(cust().some(x=>x.url===u)){err.textContent="이미 추가한 주소예요.";return;}const nm=$("#mn").value.trim()||u.replace(/^https:\/\//,"").split("/")[0];S.customMcp=[...cust(),{name:nm,url:u}];save();render();toast("커넥터를 추가했어요 (예시)");return;}
 if(f.id==="taskForm"){const n=$("#tn").value.trim(),pr=$("#tp").value.trim(),err=$("#terr");if(!n){err.textContent="이름을 입력해 주세요.";$("#tn").focus();return;}if(!pr){err.textContent="시킬 말을 입력해 주세요.";$("#tp").focus();return;}
  if(!$("#tt").value){err.textContent="시간을 정해 주세요.";return;}S.tasks.unshift({id:"t"+Date.now(),name:n,prompt:pr,freq:$("#tf").value,day:$("#td").value,time:$("#tt").value,on:true});S.taskNew=false;S.taskDraft=null;save();render();toast("예약 작업을 만들었어요");return;}
@@ -695,7 +827,7 @@ if(f.id==="agentForm"){readDraft();const d=S.draft;if(!d.name){$("#aerr").textCo
 if(f.id==="guardForm"){const em=($("#ge").value||"").trim().toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){$("#gerr").textContent="이메일 주소를 확인해 주세요.";return;}S.guardian={email:em,at:Date.now()};save();toast("보호자로 등록했어요");render();return;}
 if(f.id==="projForm"){const n=$("#pn").value.trim();if(!n){$("#perr").textContent="프로젝트 이름을 입력해 주세요.";return;}S.projects.unshift({id:"p"+Date.now(),name:n,desc:$("#pd").value.trim(),n:0,u:"방금",ins:"",files:[]});S.newProj=false;render();toast("프로젝트를 만들었어요");return;}
 if(f.id==="renameForm"){const v=$("#rn").value.trim();if(v){S.user.name=v;if(S.user.uid)fbSave(true);else store.set("lago_session",S.user);const us=store.get("lago_users",{});if(us[S.user.email]){us[S.user.email].name=v;store.set("lago_users",us);}}S.renaming=false;render();toast("이름을 바꿨어요");}});
-document.addEventListener("click",e=>{let ch=false;if(S.menu&&!e.target.closest(".composer")){S.menu=false;ch=true;}if(S.conn&&!e.target.closest(".composer")){S.conn=false;ch=true;}if(S.acct&&!e.target.closest(".acct,[data-act=acct]")){S.acct=false;ch=true;}if(S.cmenu&&!e.target.closest(".cmenu,[data-cmenu]")){S.cmenu=null;ch=true;}if(ch)render();},true);
+document.addEventListener("click",e=>{let ch=false;if(S.plus&&!e.target.closest(".composer")){S.plus=false;ch=true;}if(S.menu&&!e.target.closest(".composer")){S.menu=false;ch=true;}if(S.conn&&!e.target.closest(".composer")){S.conn=false;ch=true;}if(S.acct&&!e.target.closest(".acct,[data-act=acct]")){S.acct=false;ch=true;}if(S.cmenu&&!e.target.closest(".cmenu,[data-cmenu]")){S.cmenu=null;ch=true;}if(ch)render();},true);
 
 /* ---------- brand 3D mark (login) ---------- */
 function startBrand(){if(!window.THREE)return;const canvas=$("#bc"),host=canvas.parentElement;if(brandStage)brandStage.stop();
