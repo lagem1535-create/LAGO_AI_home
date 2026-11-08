@@ -276,7 +276,7 @@ else if(m.t==="done")cd=m;else if(m.t==="error")cd={error:m.error};}if(done)brea
 if(!cd.answer)throw new Error(cd.error);}
 else cd=await cr.json();
 if(cr.ok&&cd.answer){const body=esc(cd.answer).replace(/\[(\d)\]/g,'<span class="cite">[$1]</span>').replace(/\n/g,"<br>");const lab=x=>x.db||"위키백과",card=x=>srcCard(x.n,x.title||lab(x),[lab(x),x.publisher,x.date].filter(Boolean).join(" · "),x.url);
-const head=`${cd.viaDb?`자료 ${cd.refs}개 찾음${cd.dbs&&cd.dbs.length?" ("+esc(cd.dbs.join("·"))+")":""}`:`위키백과 ${cd.refs}개 찾음`} · Fonte가 답했어요`;
+const head=`${cd.viaDb?`자료 ${cd.refs}개 찾음${cd.dbs&&cd.dbs.length?" ("+esc(cd.dbs.join("·"))+")":""}`:`위키백과 ${cd.refs}개 찾음`} · ${cd.direct?"기사 목록":"Fonte가 답했어요"}`;
 const all=cd.sources||[];return{html:(all.length?`<details class="srcsum"><summary class="status">${ic("globe",14)} ${head} <span class="chev">${ic("down",12)}</span></summary><div class="srcs" style="margin-top:8px">${all.map(x=>card(x)).join("")}</div></details>`:`<span class="status">${ic("globe",14)} ${head}</span>`)+`<p class="answer">${body}</p>${all.some(x=>x.cited)?`<div class="srcs">${all.filter(x=>x.cited).map(card).join("")}</div>`:""}`,plain:cd.answer,meta:modeOf(S.mode).lab+(cd.viaDb?" · 검색 DB":" · 위키백과"),src:all};}
 if(cr.status===429||cr.status===403)return{html:`<p class="answer">${esc(cd.error||"지금은 답할 수 없어요")}</p>`,plain:cd.error||"",meta:modeOf(S.mode).lab};}catch(e){}}
 const r=await fetch("/api/wiki?q="+encodeURIComponent(q));const d=await r.json();if(!r.ok||!d.found)return null;

@@ -326,7 +326,7 @@ async function newsRefs(q, report) {
     pick.sort((a, b) => b.ts - a.ts);
   }
   const kst = (ts) => (ts ? new Date(ts + 9 * 3600e3).toISOString().slice(0, 10) : "");
-  return pick.map((x) => ({ ...x, date: kst(x.ts), extract: `${x.publisher} ${kst(x.ts)} — ${x.title}${x.extract ? ". " + x.extract : ""}` }));
+  return pick.map((x) => ({ ...x, date: kst(x.ts), sum: x.extract, extract: `${x.publisher} ${kst(x.ts)} — ${x.title}${x.extract ? ". " + x.extract : ""}` }));
 }
 async function chat(req, env, url, ctx) {
   const origin = req.headers.get("origin");
@@ -351,7 +351,7 @@ async function chat(req, env, url, ctx) {
   }
   bump(env, ctx, "chat");
   const task = ["ask", "agent", "translate", "summary"].includes(b.task) ? b.task : "ask";
-  let refs = [], system = FACT_SYS, user = "", maxTok = 400;
+  let refs = [], system = FACT_SYS, user = "", maxTok = 400, newsMode = false;
   // 앞 대화(최근 몇 줄)로 "어떤 처벌을 해?" 같은 짧은 후속 질문도 이해하게 해요
   const hist = (Array.isArray(b.hist) ? b.hist : []).slice(-6).map((h) => ({ r: h && h.r === "a" ? "a" : "u", t: String((h && h.t) || "").replace(/\s+/g, " ").slice(0, 300) })).filter((h) => h.t);
   const lastU = [...hist].reverse().find((h) => h.r === "u");
@@ -435,13 +435,12 @@ async function chat(req, env, url, ctx) {
       }
     } catch (e) { /* 모델 서버 연결 문제는 아래 /generate 에서 다시 확인해요 */ }
     finally { clearTimeout(t0); }
-    let newsMode = false;
     if (NEWS_RE.test(q)) { try { refs = (await newsRefs(sq)).slice(0, 4); newsMode = refs.length > 0; } catch {} }
     if (!refs.length) { try { refs = (await wiki(sq)).results || []; } catch {} }
     if (ctxIn) refs.unshift({ title: "첨부한 글", extract: ctxIn, url: "", att: true });
-    // 뉴스는 제목+요약을 짧게만 (태블릿은 읽는 시간이 길어서 90초 안에 끝나게)
-    const ctxText = refs.length ? refs.map((x, i) => newsMode ? `[${i + 1}] ${String(x.extract).slice(0, 190)}` : `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
-    user = `참고자료:\n${ctxText}\n\n${newsMode ? "" : histTxt.replace(/^첨부한 글:[\s\S]*?\n\n/, "")}질문: ${q}${newsMode ? "\n(자료의 기사만 근거로 3문장 이내로 짧게 답하라)" : ""}`;
+    // 뉴스도 학습한 형식 "[번호] [제목] 내용" 그대로, 짧게만 (태블릿은 읽는 시간이 길어요)
+    const ctxText = refs.length ? refs.map((x, i) => newsMode ? `[${i + 1}] [${x.title}] ${x.publisher} ${x.date}. ${String(x.sum || "").slice(0, 160)}` : `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
+    user = `참고자료:\n${ctxText}\n\n${newsMode ? "" : histTxt.replace(/^첨부한 글:[\s\S]*?\n\n/, "")}질문: ${q}`;
     if (newsMode) maxTok = 160;
   } else if (task === "agent") {
     const ag = b.agent || {};
@@ -470,6 +469,10 @@ async function chat(req, env, url, ctx) {
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
     return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
   };
+  const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
+  const noInfo = (a) => /제공된 자료에는 해당 내용이 없습니다/.test(String(a || ""));
+  // 주제 없는 "오늘 뉴스" 질문은 모델을 거치지 않고 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
+  if (newsMode && task === "ask" && newsTokens(sq).length === 0) { const pl = payload({ answer: newsAnswer() }); if (pl) return json({ ...pl, direct: true }); }
   if (lurl && task === "ask" && b.stream) {
     // 오래 걸려도 연결이 끊기지 않게, 10초마다 빈 줄을 보내며 기다려요 (앱은 빈 줄을 무시해요)
     const { readable, writable } = new TransformStream();
@@ -481,7 +484,7 @@ async function chat(req, env, url, ctx) {
         send({ t: "refs", refs: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과") })) });
         const lr = await llamaChat(env, lurl, system, user, maxTok < 300 ? maxTok : 300, ac.signal, okModel(b.model));
         if (lr.status) send({ t: "error", error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")" });
-        else { const pl = payload(lr); send(pl ? { t: "done", ...pl } : { t: "error", error: "빈 답이 왔어요" }); }
+        else { const pl = payload(newsMode && noInfo(lr.answer) ? { answer: newsAnswer() } : lr); send(pl ? { t: "done", ...pl, ...(newsMode && noInfo(lr.answer) ? { direct: true } : {}) } : { t: "error", error: "빈 답이 왔어요" }); }
       } catch { send({ t: "error", error: "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" }); }
       finally { clearInterval(ka); clearTimeout(t); w.close().catch(() => {}); }
     })();
