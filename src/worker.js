@@ -299,17 +299,19 @@ function parseFeed(xml, pub) {
 function newsTokens(q) {
   return String(q).replace(/[?？!.,~"'`]/g, " ").split(/\s+/).map((w) => w.replace(/(은|는|이|가|을|를|의|에|도|만|와|과)$/, "")).filter((w) => w.length >= 2 && !NEWS_STOP.test(w));
 }
-async function rssNews() {
+async function rssNews(report) {
   const all = (await Promise.all(NEWS_FEEDS.map(async ([pub, u]) => {
     try {
       const r = await fetch(u, { headers: { "user-agent": "Mozilla/5.0 (LAGO-AI news)", accept: "application/rss+xml, application/xml, text/xml, */*" }, cf: { cacheTtl: 600, cacheEverything: true } });
-      return r.ok ? parseFeed(await r.text(), pub) : [];
-    } catch { return []; }
+      const items = r.ok ? parseFeed(await r.text(), pub) : [];
+      if (report) report.push({ pub, url: u, status: r.status, n: items.length });
+      return items;
+    } catch (e) { if (report) report.push({ pub, url: u, status: 0, n: 0, err: String(e.message || e).slice(0, 80) }); return []; }
   }))).flat();
   return all;
 }
-async function newsRefs(q) {
-  const all = await rssNews();
+async function newsRefs(q, report) {
+  const all = await rssNews(report);
   const seen = new Set();
   const uniq = all.filter((x) => { const k = x.title.replace(/\s/g, "").slice(0, 30); if (seen.has(k)) return false; seen.add(k); return true; });
   const toks = newsTokens(q);
@@ -1088,6 +1090,7 @@ export default {
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/share") || p.startsWith("/api/tools/") || p.startsWith("/api/html/")) return await shareTools(req, env, url, ctx, p);
+      if (p === "/api/news") { const rep = []; const refs = await newsRefs(url.searchParams.get("q") || "오늘 뉴스", rep); return json({ feeds: rep, found: refs.length, refs: refs.map((x) => ({ title: x.title, publisher: x.publisher, date: x.date, url: x.url })) }, 200, { "cache-control": "no-store" }); }
       if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/notify") return req.method === "POST" ? (bump(env, ctx, "notify"), await notify(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (req.method !== "GET") return json({ error: "GET만 돼요" }, 405);
