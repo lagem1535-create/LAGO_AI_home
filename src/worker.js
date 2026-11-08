@@ -299,23 +299,6 @@ function parseFeed(xml, pub) {
 function newsTokens(q) {
   return String(q).replace(/[?？!.,~"'`]/g, " ").split(/\s+/).map((w) => w.replace(/(은|는|이|가|을|를|의|에|도|만|와|과)$/, "")).filter((w) => w.length >= 2 && !NEWS_STOP.test(w));
 }
-// 다니의 뉴스 DB: GitHub Actions가 하루 두 번 모아 허깅페이스 lagem/LAGO_AI_DB 의 news/news_recent.json 으로 올려요(비공개라 읽기 키 HF_TOKEN 필요).
-let dbNewsCache = { at: 0, items: [], updated: "" };
-async function dbNews(env) {
-  if (!env.HF_TOKEN) return [];
-  if (Date.now() - dbNewsCache.at < 600000 && dbNewsCache.items.length) return dbNewsCache.items;
-  try {
-    const r = await fetch("https://huggingface.co/datasets/lagem/LAGO_AI_DB/resolve/main/news/news_recent.json", { headers: { authorization: "Bearer " + env.HF_TOKEN, "user-agent": UA } });
-    if (!r.ok) return dbNewsCache.items;
-    const d = await r.json();
-    const items = (Array.isArray(d.items) ? d.items : []).map((x) => ({
-      title: String(x.title || "").slice(0, 150), extract: String(x.text || "").replace(String(x.title || ""), "").replace(/^[\s.\-—:]+/, "").slice(0, 300),
-      url: /^https?:\/\//.test(x.url || "") ? String(x.url).slice(0, 300) : "", publisher: String(x.publisher || "").slice(0, 30), ts: Date.parse(x.date) || 0, db: "뉴스",
-    })).filter((x) => x.title);
-    dbNewsCache = { at: Date.now(), items, updated: String(d.updated || "") };
-    return items;
-  } catch { return dbNewsCache.items; }
-}
 async function rssNews() {
   const all = (await Promise.all(NEWS_FEEDS.map(async ([pub, u]) => {
     try {
@@ -325,9 +308,8 @@ async function rssNews() {
   }))).flat();
   return all;
 }
-async function newsRefs(q, env) {
-  let all = await dbNews(env);
-  if (all.length < 5) all = all.concat(await rssNews());
+async function newsRefs(q) {
+  const all = await rssNews();
   const seen = new Set();
   const uniq = all.filter((x) => { const k = x.title.replace(/\s/g, "").slice(0, 30); if (seen.has(k)) return false; seen.add(k); return true; });
   const toks = newsTokens(q);
@@ -451,7 +433,7 @@ async function chat(req, env, url, ctx) {
       }
     } catch (e) { /* 모델 서버 연결 문제는 아래 /generate 에서 다시 확인해요 */ }
     finally { clearTimeout(t0); }
-    if (NEWS_RE.test(q)) { try { refs = await newsRefs(sq, env); } catch {} }
+    if (NEWS_RE.test(q)) { try { refs = await newsRefs(sq); } catch {} }
     if (!refs.length) { try { refs = (await wiki(sq)).results || []; } catch {} }
     if (ctxIn) refs.unshift({ title: "첨부한 글", extract: ctxIn, url: "", att: true });
     const ctxText = refs.length ? refs.map((x, i) => `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
@@ -894,7 +876,7 @@ async function runTasks(env, ctx) {
 // 키는 Workers KV(ADMIN_KV)에 저장해요. 대시보드의 시크릿이 있으면 그쪽이 우선이에요.
 // FIREBASE_CONFIG는 로그인 확인에 쓰이는 값이라 여기서 바꾸지 못하고 대시보드에서만 넣어요.
 const ADMIN_DEFAULT = "lagem1535@gmail.com";
-const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT", "MODEL_URL", "MODEL_KEY", "LLAMA_API_KEY", "MODEL_REGISTER_KEY", "HF_TOKEN"];
+const SECRET_NAMES = ["RESEND_API_KEY", "MAIL_FROM", "DATA_GO_KR_KEY", "FIREBASE_SERVICE_ACCOUNT", "MODEL_URL", "MODEL_KEY", "LLAMA_API_KEY", "MODEL_REGISTER_KEY"];
 const STAT_NAMES = ["visits", "wiki", "holidays", "kidConsent", "notify", "taskRun", "mailSent", "mailFail", "chat"];
 
 let secCache = { at: 0, v: {} };
