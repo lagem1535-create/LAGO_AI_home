@@ -471,8 +471,8 @@ async function chat(req, env, url, ctx) {
   };
   const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
   const noInfo = (a) => /제공된 자료에는 해당 내용이 없습니다/.test(String(a || ""));
-  // 주제 없는 "오늘 뉴스" 질문은 모델을 거치지 않고 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
-  if (newsMode && task === "ask" && newsTokens(sq).length === 0) { const pl = payload({ answer: newsAnswer() }); if (pl) return json({ ...pl, direct: true }); }
+  // 뉴스 질문은 모델을 거치지 않고 (태블릿이 기사를 읽는 데 몇 분 걸려요) 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
+  if (newsMode && task === "ask") { const pl = payload({ answer: newsAnswer() }); if (pl) return json({ ...pl, direct: true }); }
   if (lurl && task === "ask" && b.stream) {
     // 오래 걸려도 연결이 끊기지 않게, 10초마다 빈 줄을 보내며 기다려요 (앱은 빈 줄을 무시해요)
     const { readable, writable } = new TransformStream();
