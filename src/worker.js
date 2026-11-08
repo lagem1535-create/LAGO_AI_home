@@ -463,7 +463,31 @@ async function chat(req, env, url, ctx) {
     }
   }
   const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 90000);
+  const t = setTimeout(() => ac.abort(), 20 * 60 * 1000);   // 사실상 제한 없음(20분). 태블릿이 느려도 기다려요.
+  const payload = (d) => {
+    const ans = String((d && d.answer) || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+    if (!ans) return null;
+    const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
+    return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
+  };
+  if (lurl && task === "ask" && b.stream) {
+    // 오래 걸려도 연결이 끊기지 않게, 10초마다 빈 줄을 보내며 기다려요 (앱은 빈 줄을 무시해요)
+    const { readable, writable } = new TransformStream();
+    const w = writable.getWriter(), enc = new TextEncoder();
+    const send = (o) => w.write(enc.encode(JSON.stringify(o) + "\n")).catch(() => {});
+    const run = (async () => {
+      const ka = setInterval(() => w.write(enc.encode("\n")).catch(() => {}), 10000);
+      try {
+        send({ t: "refs", refs: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과") })) });
+        const lr = await llamaChat(env, lurl, system, user, maxTok < 300 ? maxTok : 300, ac.signal, okModel(b.model));
+        if (lr.status) send({ t: "error", error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")" });
+        else { const pl = payload(lr); send(pl ? { t: "done", ...pl } : { t: "error", error: "빈 답이 왔어요" }); }
+      } catch { send({ t: "error", error: "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" }); }
+      finally { clearInterval(ka); clearTimeout(t); w.close().catch(() => {}); }
+    })();
+    if (ctx && ctx.waitUntil) ctx.waitUntil(run);
+    return new Response(readable, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+  }
   try {
     let d;
     if (lurl) {
