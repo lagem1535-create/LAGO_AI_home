@@ -90,11 +90,13 @@ async function llamaUrl(env) {
   try { return String((await env.ADMIN_KV.get("config:llama_url")) || "").replace(/\/+$/, ""); } catch { return ""; }
 }
 const okLlamaUrl = (v) => /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(:\d+)?(\/[^\s]*)?$/i.test(v) && v.length <= 300 && !/^https:\/\/(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.)/i.test(v);
-async function llamaChat(env, base, system, user, maxTok, signal) {
+const MODELS = ["fonte", "torrente", "mare", "code"];
+const okModel = (v) => (MODELS.includes(String(v || "").toLowerCase()) ? String(v).toLowerCase() : "");
+async function llamaChat(env, base, system, user, maxTok, signal, model) {
   const r = await fetch(base + "/v1/chat/completions", {
     method: "POST", signal,
     headers: { "content-type": "application/json", authorization: "Bearer " + env.LLAMA_API_KEY, "user-agent": UA },
-    body: JSON.stringify({ messages: [{ role: "system", content: system }, { role: "user", content: user }], stream: false, max_tokens: maxTok }),
+    body: JSON.stringify({ messages: [{ role: "system", content: system }, { role: "user", content: user }], stream: false, max_tokens: maxTok, ...(model ? { model } : {}) }),
   });
   if (!r.ok) return { status: r.status };
   const d = await r.json();
@@ -116,6 +118,32 @@ async function pubGate(req, env, url, ctx) {
   await env.ADMIN_KV.put(k, String(n + 1), { expirationTtl: 172800 });
   return { u };
 }
+const normEmails = (v) => [...new Set((Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => String(x).trim().toLowerCase()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x) && x.length <= 120))].slice(0, 10);
+// 이메일로 지정한 사람만 볼 수 있는 항목: 로그인(메일 인증)한 같은 주소이거나 주인이어야 해요
+async function audCheck(req, env, d) {
+  if (!d.emails || !d.emails.length) return null;
+  const u = await tokenUser(req, env);
+  if (!u) return json({ error: "지정된 사람만 볼 수 있어요. 로그인해 주세요", needLogin: true }, 401);
+  if (u.localId === d.owner) return null;
+  if (u.emailVerified && d.emails.includes(String(u.email || "").toLowerCase())) return null;
+  return json({ error: "이 링크는 지정된 사람만 열 수 있어요", restricted: true }, 403);
+}
+async function inviteMail(env, url, to, name, link, from) {
+  if (!env.RESEND_API_KEY || !to.length) return 0;
+  let n = 0;
+  for (const t of to) {
+    try {
+      const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
+        body: JSON.stringify({ from: env.MAIL_FROM || "LAGO <onboarding@resend.dev>", to: [t], subject: `[LAGO] ${cap(from, 20) || "누군가"}님이 '${cap(name, 40)}'을(를) 보냈어요`, text: `${cap(from, 20) || "누군가"}님이 LAGO에서 '${cap(name, 40)}'을(를) 보냈어요.\n\n${link}\n\n이 주소로 LAGO에 로그인하면 열 수 있어요. 모르는 사람이 보냈다면 이 메일은 무시해도 돼요.` }) });
+      if (r.ok) n++;
+    } catch {}
+  }
+  return n;
+}
+function htmlPage(body) {
+  return new Response(body, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
+    "content-security-policy": "sandbox allow-scripts allow-forms allow-popups allow-modals; default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: blob: https:; media-src data: blob: https:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" } });
+}
 async function shareTools(req, env, url, ctx, p) {
   const post = req.method === "POST";
   // 공개 읽기
@@ -123,13 +151,13 @@ async function shareTools(req, env, url, ctx, p) {
   if (m && req.method === "GET") {
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("share:" + m[1]);
     if (!o) return json({ error: "공유가 끝났거나 없는 링크예요" }, 404);
-    const d = JSON.parse(o); return json({ title: d.title, name: d.name, msgs: d.msgs, at: d.at, upd: d.upd }, 200, { "x-robots-tag": "noindex" });
+    const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ title: d.title, name: d.name, msgs: d.msgs, at: d.at, upd: d.upd }, 200, { "x-robots-tag": "noindex" });
   }
   m = p.match(/^\/api\/tools\/([a-z0-9]{6,16})$/);
   if (m && req.method === "GET") {
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + m[1]);
     if (!o) return json({ error: "배포가 끝났거나 없는 도구예요" }, 404);
-    const d = JSON.parse(o); return json({ id: m[1], name: d.name, desc: d.desc, input: d.input, opts: d.opts, owner: d.ownerName || "", runs: d.runs || 0 });
+    const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ id: m[1], kind: d.kind || "tool", name: d.name, desc: d.desc, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", runs: d.runs || 0 });
   }
   if (!post) return json({ error: "POST만 돼요" }, 405);
   if (p === "/api/share") {
@@ -142,7 +170,7 @@ async function shareTools(req, env, url, ctx, p) {
       return o;
     }).filter((x) => x.t);
     if (!msgs.length) return json({ error: "공유할 대화가 비어 있어요" }, 400);
-    const d = { title: cap(b.title, 60) || "대화", name: b.showName ? cap(b.name, 30) : "", msgs, owner: g.u.localId, at: Date.now() };
+    const d = { title: cap(b.title, 60) || "대화", name: b.showName ? cap(b.name, 30) : "", msgs, owner: g.u.localId, at: Date.now(), emails: normEmails(b.emails) };
     if (JSON.stringify(d).length > 180000) return json({ error: "대화가 너무 길어요. 앞부분을 줄여서 공유해 주세요" }, 413);
     let id = /^[a-z0-9]{6,16}$/.test(b.id || "") ? b.id : "";
     if (id) {
@@ -151,7 +179,8 @@ async function shareTools(req, env, url, ctx, p) {
     }
     if (!id) id = rid();
     await env.ADMIN_KV.put("share:" + id, JSON.stringify(d));
-    return json({ ok: true, id, url: url.origin + "/s/" + id });
+    const sent = b.invite && d.emails.length ? await inviteMail(env, url, d.emails, d.title, url.origin + "/s/" + id, g.u.displayName || b.name) : 0;
+    return json({ ok: true, id, url: url.origin + "/s/" + id, sent, mail: !!env.RESEND_API_KEY });
   }
   if (p === "/api/share/delete" || p === "/api/tools/unpublish") {
     const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
@@ -166,7 +195,7 @@ async function shareTools(req, env, url, ctx, p) {
     let b = {}; try { b = await req.json(); } catch {}
     const name = cap(b.name, 30).trim(), ins = cap(b.ins, 1500).trim();
     if (!name || !ins) return json({ error: "이름과 지시문이 필요해요" }, 400);
-    const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now() };
+    const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now(), kind: b.kind === "mode" ? "mode" : "tool", starters: (Array.isArray(b.starters) ? b.starters : []).slice(0, 3).map((x) => cap(x, 80)).filter(Boolean), model: okModel(b.model), emails: normEmails(b.emails) };
     let id = /^[a-z0-9]{6,16}$/.test(b.id || "") ? b.id : "";
     if (id) {
       const old = await env.ADMIN_KV.get("tool:" + id);
@@ -179,15 +208,49 @@ async function shareTools(req, env, url, ctx, p) {
       id = rid(); live.push(id); await env.ADMIN_KV.put(k, JSON.stringify(live));
     }
     await env.ADMIN_KV.put("tool:" + id, JSON.stringify(d));
-    return json({ ok: true, id, url: url.origin + "/t/" + id });
+    const link = url.origin + "/t/" + id;
+    const sent = b.invite && d.emails.length ? await inviteMail(env, url, d.emails, d.name, link, b.ownerName || g.u.displayName) : 0;
+    return json({ ok: true, id, url: link, sent, mail: !!env.RESEND_API_KEY });
+  }
+  if (p === "/api/html/publish") {
+    const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
+    let b = {}; try { b = await req.json(); } catch {}
+    const code = String(b.code || ""), title = cap(b.title, 40).trim() || "내 페이지";
+    if (code.length < 20) return json({ error: "HTML이 너무 짧아요" }, 400);
+    if (code.length > 200000) return json({ error: "HTML은 200KB까지예요" }, 413);
+    if (!/<\/?[a-z][\s\S]*>/i.test(code)) return json({ error: "HTML 코드가 아니에요" }, 400);
+    const d = { title, code, owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now(), emails: normEmails(b.emails) };
+    let id = /^[a-z0-9]{6,16}$/.test(b.id || "") ? b.id : "";
+    if (id) {
+      const old = await env.ADMIN_KV.get("html:" + id);
+      if (old) { const od = JSON.parse(old); if (od.owner !== g.u.localId) return json({ error: "내 페이지가 아니에요" }, 403); d.at = od.at; d.upd = Date.now(); } else id = "";
+    }
+    if (!id) {
+      const k = "uhtml:" + g.u.localId, list = JSON.parse((await env.ADMIN_KV.get(k)) || "[]").filter(Boolean);
+      const live = []; for (const x of list) if (await env.ADMIN_KV.get("html:" + x)) live.push(x);
+      if (live.length >= 10) return json({ error: "공개한 페이지는 10개까지예요. 하나를 내려 주세요" }, 400);
+      id = rid(); live.push(id); await env.ADMIN_KV.put(k, JSON.stringify(live));
+    }
+    await env.ADMIN_KV.put("html:" + id, JSON.stringify(d));
+    const link = url.origin + "/h/" + id;
+    const sent = b.invite && d.emails.length ? await inviteMail(env, url, d.emails, title, link, b.ownerName || g.u.displayName) : 0;
+    return json({ ok: true, id, url: link, sent, mail: !!env.RESEND_API_KEY });
+  }
+  if (p === "/api/html/unpublish") {
+    const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
+    let b = {}; try { b = await req.json(); } catch {}
+    const key = "html:" + cap(b.id, 16), o = await env.ADMIN_KV.get(key);
+    if (o) { if (JSON.parse(o).owner !== g.u.localId) return json({ error: "내 것이 아니에요" }, 403); await env.ADMIN_KV.delete(key); }
+    return json({ ok: true });
   }
   if (p === "/api/tools/run") {
     let b = {}; try { b = await req.clone().json(); } catch {}
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + cap(b.id, 16));
     if (!o) return json({ error: "배포가 끝났거나 없는 도구예요" }, 404);
     const d = JSON.parse(o);
+    const ae = await audCheck(req, env, d); if (ae) return ae;
     const ins = d.ins + (b.opt && d.opts.includes(b.opt) ? "\n선택한 옵션: " + b.opt : "");
-    const r2 = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify({ task: "agent", q: cap(b.text, 500), ctx: cap(b.text, 3000), agent: { name: d.name, instructions: ins } }) });
+    const r2 = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify({ task: "agent", q: cap(b.text, 500), ctx: cap(b.text, 3000), agent: { name: d.name, instructions: ins }, model: d.model || undefined }) });
     const res = await chat(r2, env, url, ctx);
     if (res.status === 200 && ctx && ctx.waitUntil) ctx.waitUntil(env.ADMIN_KV.put("tool:" + b.id, JSON.stringify({ ...d, runs: (d.runs || 0) + 1 })));
     return res;
@@ -330,7 +393,7 @@ async function chat(req, env, url, ctx) {
   try {
     let d;
     if (lurl) {
-      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? 300 : maxTok, ac.signal);
+      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? 300 : maxTok, ac.signal, okModel(b.model));
       if (lr.status) return json({ error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")", modelDown: true }, 502);
       d = lr;
     } else {
@@ -947,6 +1010,7 @@ export default {
     const env = await withSecrets(rawEnv);
     const url = new URL(req.url);
     const p = url.pathname;
+    { const hm = p.match(/^\/h\/([a-z0-9]{6,16})$/); if (hm && req.method === "GET" && env.ADMIN_KV) { const o = await env.ADMIN_KV.get("html:" + hm[1]); if (!o) return new Response("공개가 끝났거나 없는 페이지예요", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } }); return htmlPage(JSON.parse(o).code); } }
     if (!p.startsWith("/api/")) { const ar = await env.ASSETS.fetch(req); if (p.startsWith("/s/") || p.startsWith("/t/")) { const h = new Headers(ar.headers); h.set("x-robots-tag", "noindex"); return new Response(ar.body, { status: ar.status, headers: h }); } return ar; }
     try {
       if (p === "/api/tasks/sync") return req.method === "POST" ? await tasksSync(req, env, url) : json({ error: "POST만 돼요" }, 405);
@@ -954,7 +1018,7 @@ export default {
       if (p === "/api/admin/model-url") return req.method === "POST" ? await registerModelUrl(req, env) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
-      if (p.startsWith("/api/share") || p.startsWith("/api/tools/")) return await shareTools(req, env, url, ctx, p);
+      if (p.startsWith("/api/share") || p.startsWith("/api/tools/") || p.startsWith("/api/html/")) return await shareTools(req, env, url, ctx, p);
       if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/notify") return req.method === "POST" ? (bump(env, ctx, "notify"), await notify(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (req.method !== "GET") return json({ error: "GET만 돼요" }, 405);
