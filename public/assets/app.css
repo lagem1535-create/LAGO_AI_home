@@ -575,6 +575,43 @@ h1{font-size:30px;line-height:1.2}
 .srchrow .grow{min-width:0}.srchrow b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.srchrow small{display:block;color:var(--mut);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .srchin input::-webkit-search-cancel-button,.srchin input::-webkit-search-decoration{display:none;-webkit-appearance:none}
 .acctrow{flex-wrap:wrap;row-gap:6px}.acctrow .grow{flex:1 1 90px}.acctrow .seg.mini{margin-left:auto}
+
+/* ==RICH== 표 · 차트 · 수식 */
+.answer.rich>p{margin:0 0 .7em}.answer.rich>p:last-child{margin-bottom:0}
+.answer.rich .rh{font-weight:700;font-size:16px;margin:.9em 0 .4em}
+.answer.rich .rl{margin:.2em 0 .7em;padding-left:1.4em}.answer.rich .rl li{margin:.15em 0}
+.answer.rich code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em;background:var(--soft,rgba(120,130,160,.14));padding:1px 5px;border-radius:5px}
+.answer.rich .codeb{margin:.4em 0 .8em;padding:12px 14px;border-radius:10px;background:var(--soft,rgba(120,130,160,.14));overflow-x:auto;font-size:13px;line-height:1.55}
+.answer.rich .codeb code{background:none;padding:0}
+.answer.rich hr{border:0;border-top:1px solid var(--line);margin:.9em 0}
+.tblw{overflow-x:auto;margin:.4em 0 .9em;border:1px solid var(--line);border-radius:10px;max-width:100%}
+.rt{border-collapse:collapse;width:100%;font-size:14px;line-height:1.5}
+.rt th,.rt td{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.rt th{font-weight:700;background:var(--soft,rgba(120,130,160,.12))}
+.rt tr:last-child td{border-bottom:0}
+.rt td{white-space:normal;min-width:70px}
+.chart{margin:.4em 0 .9em;padding:12px 14px 10px;border:1px solid var(--line);border-radius:12px;max-width:560px}
+.chart .chtt{font-weight:700;font-size:14px;margin-bottom:6px}
+.chart svg{width:100%;height:auto;display:block;overflow:visible}
+.chart .chgl{stroke:var(--line);stroke-width:1}.chart .chax{stroke:var(--line);stroke-width:1.5}
+.chart .chtx{font-size:11px;fill:currentColor;opacity:.7}.chart .chtx.v{opacity:.95;font-weight:600}
+.chart .chsl:hover{opacity:.82}
+.chlg{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px}
+.chlg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.chlg span{opacity:.65}
+.chpie{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.chpie svg{width:180px;flex:none}
+.chpie .chlg{flex-direction:column;margin:0;gap:6px}
+.math{font-family:"Latin Modern Math","STIX Two Math","Cambria Math",Georgia,"Times New Roman",serif;font-size:1.06em;white-space:nowrap}
+.mathb{font-family:"Latin Modern Math","STIX Two Math","Cambria Math",Georgia,"Times New Roman",serif;font-size:1.25em;text-align:center;margin:.5em 0 .8em;overflow-x:auto;padding:4px 0;line-height:2}
+.mv{font-style:italic}.mfn{margin:0 .15em}
+.mf{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 .15em;line-height:1.15}
+.mf .mn{border-bottom:1.5px solid currentColor;padding:0 .2em .08em}.mf .md{padding:.08em .2em 0}
+.msq{display:inline-block;white-space:nowrap}.msq>.msqi{display:inline-block;line-height:1.25}.msq .msqi{border-top:1.5px solid currentColor;padding:0 .12em;margin-left:1px}
+.mrt{font-size:.6em;margin-right:-2px}
+.mss{display:inline-flex;flex-direction:column;vertical-align:middle;font-size:.72em;line-height:1.1}.mss sup,.mss sub{font-size:1em;vertical-align:baseline;line-height:1.1}
+.mbig{font-size:1.5em;vertical-align:middle;margin:0 .1em}
+.mov{border-top:1.5px solid currentColor}
+.mvec{position:relative;display:inline-block}.mvec i{position:absolute;left:0;right:0;top:-.75em;text-align:center;font-size:.7em;font-style:normal}
 /* ==DARK-GEN-START== */
 
 :root[data-lago=dark]{color-scheme:dark;--bg:#14161C;--card:#1D2028;--side:#181B21;--line:#2E3441;--ink:#E7EAF3;--ink2:#C5CBDA;--mut:#9CA5BA;--mut2:#8A93A9;--mut3:#7B849A;--blue:#8FAAF5;--sky:#7FA2FF;--mist:#212A45;--sel:#283766;--gbg:#14201A;--gt:#1B2E24;--gline:#27402F;--gside:#17241D;--kt:#16293B;--warnbg:#33231B;--g:#4CC585;--gd:#BDE8D0;--kd:#8CC6F2;--err:#F07468;--warn:#E08A62}

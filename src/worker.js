@@ -439,7 +439,7 @@ async function chat(req, env, url, ctx) {
                     let m; try { m = JSON.parse(line); } catch { continue; }
                     if (m.t === "refs") send({ t: "refs", refs: shapeRefs(m.refs) });
                     else if (m.t === "done") {
-                      const a = String(m.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+                      const a = String(m.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
                       if (!a) { send({ t: "error", error: "빈 답이 왔어요" }); fin = true; break; }
                       const rf = shapeRefs(m.refs);
                       const c2 = [...new Set([...a.matchAll(/\[(\d)\]/g)].map((x) => +x[1]))].filter((n) => n >= 1 && n <= rf.length);
@@ -470,7 +470,7 @@ async function chat(req, env, url, ctx) {
       });
       if (r0.ok) {
         const d0 = await r0.json();
-        const ans0 = String(d0.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+        const ans0 = String(d0.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
         if (ans0) {
           const rf = (Array.isArray(d0.refs) ? d0.refs : []).slice(0, 8).map((x) => ({
             n: +x.n || 0, title: String(x.title || "").slice(0, 120), url: /^https?:\/\//.test(x.url || "") ? String(x.url).slice(0, 300) : "",
@@ -516,13 +516,15 @@ async function chat(req, env, url, ctx) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 20 * 60 * 1000);   // 사실상 제한 없음(20분). 태블릿이 느려도 기다려요.
   const payload = (d) => {
-    const ans = String((d && d.answer) || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+    const ans = String((d && d.answer) || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
     if (!ans) return null;
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
     return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
   };
   const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
   const noInfo = (a) => /제공된 자료에는 해당 내용이 없습니다/.test(String(a || ""));
+  const richAsk = /표로|표 |차트|그래프|막대|원그래프|꺾은선|수식|공식|방정식|\b(chart|graph|table|plot|pie|bar|equation|formula|latex)\b/i.test(String(b.q || b.message || ""));
+  if (richAsk && task === "ask") { system += "\n\n[서식] 표는 마크다운 표(| 열 | 열 |)로 써라. 그래프는 ```chart 코드블록 안에 JSON 한 개만 써라: {\"type\":\"bar|line|pie\",\"title\":\"제목\",\"labels\":[\"A\",\"B\"],\"data\":[1,2]} (여러 계열은 \"series\":[{\"name\":\"이름\",\"data\":[..]}]). 수식은 LaTeX를 $...$ 또는 $$...$$ 로 써라. 강조는 **굵게**, *기울임*을 써라. 지어낸 숫자는 쓰지 마라."; if (maxTok < 700) maxTok = 700; }
   if (b.lang === "en" && task !== "translate") system += "\n\nIMPORTANT: Write the whole answer in English, even if the question or the sources are in Korean. Keep source numbers like [1] as they are.";
   if (b.lang === "en" && task !== "translate") { user += "\n\n(Answer in English only.)"; if (maxTok < 600) maxTok = 600; }
   // 뉴스 질문은 모델을 거치지 않고 (태블릿이 기사를 읽는 데 몇 분 걸려요) 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
@@ -536,7 +538,7 @@ async function chat(req, env, url, ctx) {
       const ka = setInterval(() => w.write(enc.encode("\n")).catch(() => {}), 10000);
       try {
         send({ t: "refs", refs: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과") })) });
-        const lr = await llamaChat(env, lurl, system, user, maxTok < (b.lang === "en" ? 600 : 300) ? maxTok : (b.lang === "en" ? 600 : 300), ac.signal, okModel(b.model));
+        const lr = await llamaChat(env, lurl, system, user, maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300), ac.signal, okModel(b.model));
         if (lr.status) send({ t: "error", error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")" });
         else { const pl = payload(newsMode && noInfo(lr.answer) ? { answer: newsAnswer() } : lr); send(pl ? { t: "done", ...pl, ...(newsMode && noInfo(lr.answer) ? { direct: true } : {}) } : { t: "error", error: "빈 답이 왔어요" }); }
       } catch { send({ t: "error", error: "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" }); }
@@ -548,7 +550,7 @@ async function chat(req, env, url, ctx) {
   try {
     let d;
     if (lurl) {
-      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? (maxTok < (b.lang === "en" ? 600 : 300) ? maxTok : (b.lang === "en" ? 600 : 300)) : maxTok, ac.signal, okModel(b.model));
+      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? (maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300)) : maxTok, ac.signal, okModel(b.model));
       if (lr.status) return json({ error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")", modelDown: true }, 502);
       d = lr;
     } else {
@@ -560,7 +562,7 @@ async function chat(req, env, url, ctx) {
       if (!r.ok) return json({ error: "모델이 응답하지 못했어요 (" + r.status + ")", modelDown: true }, 502);
       d = await r.json();
     }
-    let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 2000);
+    let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
     return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) });
