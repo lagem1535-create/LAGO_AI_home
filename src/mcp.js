@@ -7,7 +7,7 @@ const PROTO = "2025-03-26";
 export function mcpRisk(v) {
   const out = { block: "", warn: [] };
   let u; try { u = new URL(String(v || "")); } catch { out.block = "주소 형식이 올바르지 않아요"; return out; }
-  if (String(v).length > 300) { out.block = "주소가 너무 길어요"; return out; }
+  if (String(v).length > 2000) { out.block = "주소가 너무 길어요 (2,000자까지)"; return out; }
   if (u.protocol !== "https:" && u.protocol !== "http:") { out.block = "http:// 또는 https:// 주소만 쓸 수 있어요"; return out; }
   if (u.username || u.password) { out.block = "주소에 아이디·비밀번호가 들어 있어요. 토큰은 따로 입력해 주세요"; return out; }
   const h = u.hostname.toLowerCase();
@@ -18,12 +18,17 @@ export function mcpRisk(v) {
     if (a === 10 || a === 127 || a === 0 || (a === 169 && b2 === 254) || (a === 172 && b2 >= 16 && b2 <= 31) || (a === 192 && b2 === 168) || a >= 224) { out.block = "내 컴퓨터·내부망 주소라 LAGO 서버가 연결할 수 없어요"; return out; }
     out.warn.push("도메인이 아니라 IP 주소예요. 누구의 서버인지 알 수 없어요");
   } else if (!h.includes(".")) { out.block = "도메인이 아니에요 (예: example.com)"; return out; }
+  if (/[?&](token|key|auth|apikey|api_key|access_token|usertoken|user_token|secret|password|pwd|sig)=/i.test(u.search)) out.warn.push("주소에 토큰이 들어 있어요. 서버에만 저장하고 화면에는 가려서 보여요. 주소가 새어 나가면 토큰도 새요");
   if (u.protocol === "http:") out.warn.push("https가 아니에요. 주고받는 내용(질문 일부, 토큰)이 암호화되지 않아요");
   if (u.port) out.warn.push("기본 포트가 아닌 포트(:" + u.port + ")를 써요");
   if (/(^|\.)xn--/.test(h)) out.warn.push("xn-- 로 시작하는 주소예요. 진짜 사이트를 흉내 낸 글자일 수 있어요");
   if (/(trycloudflare\.com|ngrok(-free)?\.(io|app|dev)|loca\.lt|serveo\.net|localhost\.run|lhr\.life)$/.test(h)) out.warn.push("임시 터널 주소예요. 언제든 다른 사람의 서버로 바뀔 수 있어요");
   if (/^(bit\.ly|t\.co|tinyurl\.com|goo\.gl|is\.gd|cutt\.ly)$/.test(h)) out.warn.push("줄임 주소예요. 실제 도착지를 알 수 없어요");
   return out;
+}
+// 화면·오류에 보여 줄 주소: 쿼리 값(토큰일 수 있어요)은 가려요
+export function maskUrl(v) {
+  try { const u = new URL(String(v || "")); const q = [...u.searchParams.keys()].map((k) => k + "=•••").join("&"); return (u.origin + u.pathname).slice(0, 160) + (q ? "?" + q.slice(0, 80) : ""); } catch { return String(v || "").slice(0, 60) + "…"; }
 }
 export const okMcpUrl = (v) => !mcpRisk(v).block;
 

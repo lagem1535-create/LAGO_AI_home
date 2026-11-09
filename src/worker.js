@@ -7,7 +7,7 @@
 //   MAIL_FROM        — (선택) 보내는 사람. 기본값 "LAGO <onboarding@resend.dev>" (이 주소는 Resend 가입 이메일에만 보낼 수 있어요)
 // 키는 브라우저로 내려보내지 않아요. 공공데이터 호출은 이 Worker가 대신 해요.
 
-import { okMcpUrl, mcpRisk, mcpTools, mcpCall, runWithMcp, userServers, serverTools } from "./mcp.js";
+import { okMcpUrl, mcpRisk, maskUrl, mcpTools, mcpCall, runWithMcp, userServers, serverTools } from "./mcp.js";
 
 const UA = "LAGO-AI/0.1 (https://lago-ai-home.lagem1535.workers.dev)";
 
@@ -241,8 +241,8 @@ async function shareTools(req, env, url, ctx, p) {
     if (isMcp) {
       if (!(await isDev(env, g.u.localId))) return json({ error: "MCP는 LAGO DEV만 올릴 수 있어요" }, 403);
       const rk = mcpRisk(b.url);
-      if (rk.block) return json({ error: rk.block, block: true, url: String(b.url || "").slice(0, 300) }, 400);
-      if (rk.warn.length && !b.ack) return json({ error: "주소에 주의가 필요해요", needAck: true, risk: rk.warn, url: String(b.url).slice(0, 300) }, 400);
+      if (rk.block) return json({ error: rk.block, block: true, url: maskUrl(b.url) }, 400);
+      if (rk.warn.length && !b.ack) return json({ error: "주소에 주의가 필요해요", needAck: true, risk: rk.warn, url: maskUrl(b.url) }, 400);
       try { const tl = await mcpTools({ url: b.url, token: cap(b.token, 400) }, true); if (!tl.length) return json({ error: "서버에 연결됐지만 쓸 수 있는 도구가 없어요" }, 400); mcpInfo = { n: tl.length, names: tl.slice(0, 12).map((t) => t.name) }; } catch (e) { return json({ error: "MCP 서버에 연결하지 못했어요: " + String(e.message || e).slice(0, 120) }, 400); }
     }
     const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now(), kind: b.kind === "mode" ? "mode" : b.kind === "mcp" ? "mcp" : "tool", starters: (Array.isArray(b.starters) ? b.starters : []).slice(0, 3).map((x) => cap(x, 80)).filter(Boolean), model: okModel(b.model), emails: normEmails(b.emails), viaDev: !!b.viaDev && await isDev(env, g.u.localId), cover: /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(b.cover || "") && b.cover.length < 120000 ? b.cover : "" };
@@ -895,7 +895,7 @@ async function mcpApi(req, env, url) {
   if (p === "/api/mcp/list" && req.method === "GET") {
     const defs = (await kget("mcp:default", [])).filter((d) => d.enabled !== false);
     const dev = []; for (const id of st.dev) { const d = await kget("tool:" + id, null); if (d && d.kind === "mcp" && !d.hidden) dev.push({ id, name: d.name, desc: d.desc || "", tools: (d.mcpTools || {}).n || 0 }); }
-    return json({ defaults: defs.map((d) => ({ id: d.id, name: d.name, desc: d.desc || "", on: !st.off.includes(d.id) })), custom: st.custom.map((c) => ({ id: c.id, name: c.name, url: c.url, on: c.on !== false, auth: !!c.token, risk: mcpRisk(c.url).warn })), dev, allow: st.allow || [] });
+    return json({ defaults: defs.map((d) => ({ id: d.id, name: d.name, desc: d.desc || "", on: !st.off.includes(d.id) })), custom: st.custom.map((c) => ({ id: c.id, name: c.name, url: maskUrl(c.url), on: c.on !== false, auth: !!c.token, risk: mcpRisk(c.url).warn })), dev, allow: st.allow || [] });
   }
   if (req.method !== "POST") return json({ error: "POST만 돼요" }, 405);
   if (p === "/api/mcp/toggle") {
@@ -907,8 +907,8 @@ async function mcpApi(req, env, url) {
   if (p === "/api/mcp/add") {
     if (st.custom.length >= 5) return json({ error: "내 커넥터는 5개까지예요" }, 400);
     const rk = mcpRisk(b.url);
-    if (rk.block) return json({ error: rk.block, block: true, url: String(b.url || "").slice(0, 300) }, 400);
-    if (rk.warn.length && !b.ack) return json({ error: "주소에 주의가 필요해요", needAck: true, risk: rk.warn, url: String(b.url).slice(0, 300) }, 400);
+    if (rk.block) return json({ error: rk.block, block: true, url: maskUrl(b.url) }, 400);
+    if (rk.warn.length && !b.ack) return json({ error: "주소에 주의가 필요해요", needAck: true, risk: rk.warn, url: maskUrl(b.url) }, 400);
     if (st.custom.some((c) => c.url === b.url)) return json({ error: "이미 추가한 주소예요" }, 400);
     let tl; try { tl = await mcpTools({ url: b.url, token: cap(b.token, 400) }, true); } catch (e) { return json({ error: "연결하지 못했어요: " + String(e.message || e).slice(0, 140) }, 400); }
     if (!tl.length) return json({ error: "연결됐지만 쓸 수 있는 도구가 없어요" }, 400);
@@ -1144,7 +1144,7 @@ async function adminApi(req, env, ctx, url, raw) {
   if (p === "/api/admin/mcp") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
     let defs = []; try { defs = JSON.parse((await env.ADMIN_KV.get("mcp:default")) || "[]"); } catch {}
-    const view = () => defs.map((d) => ({ id: d.id, name: d.name, desc: d.desc || "", url: d.url, enabled: d.enabled !== false, auth: !!d.token, risk: mcpRisk(d.url).warn }));
+    const view = () => defs.map((d) => ({ id: d.id, name: d.name, desc: d.desc || "", url: maskUrl(d.url), enabled: d.enabled !== false, auth: !!d.token, risk: mcpRisk(d.url).warn }));
     if (req.method === "GET") return json({ items: view() });
     let b = {}; try { b = await req.json(); } catch {}
     if (b.action === "test") {
@@ -1154,9 +1154,10 @@ async function adminApi(req, env, ctx, url, raw) {
     }
     if (b.action === "delete") { defs = defs.filter((d) => d.id !== b.id); await env.ADMIN_KV.put("mcp:default", JSON.stringify(defs)); return json({ ok: true, items: view() }); }
     if (b.action === "save") {
+      { const old = b.id && defs.find((x) => x.id === b.id); if (old && b.url === maskUrl(old.url)) b.url = old.url; }
       const rk = mcpRisk(b.url);
-      if (rk.block) return json({ error: rk.block, block: true, url: String(b.url || "").slice(0, 300) }, 400);
-      if (rk.warn.length && !b.ack && !(b.id && defs.find((x) => x.id === b.id && x.url === b.url))) return json({ error: "주소에 주의가 필요해요", needAck: true, risk: rk.warn, url: String(b.url).slice(0, 300) }, 400);
+      if (rk.block) return json({ error: rk.block, block: true, url: maskUrl(b.url) }, 400);
+      if (rk.warn.length && !b.ack && !(b.id && defs.find((x) => x.id === b.id && x.url === b.url))) return json({ error: "주소에 주의가 필요해요", needAck: true, risk: rk.warn, url: maskUrl(b.url) }, 400);
       const name = cap(b.name, 30).trim(); if (!name) return json({ error: "이름을 적어 주세요" }, 400);
       let d = b.id && defs.find((x) => x.id === b.id);
       if (!d) { if (defs.length >= 10) return json({ error: "기본 MCP는 10개까지예요" }, 400); d = { id: "s" + rid().slice(0, 6) }; defs.push(d); }
