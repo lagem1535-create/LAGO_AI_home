@@ -3,14 +3,29 @@
 const UA = "LAGO-MCP/1.0";
 const PROTO = "2025-03-26";
 
-export const okMcpUrl = (v) => {
-  let u; try { u = new URL(String(v || "")); } catch { return false; }
-  if (u.protocol !== "https:" || u.username || u.password || u.port) return false;
+// 주소 위험도: block(연결할 수 없음) / warn(주의, 사용자가 알고 확인하면 가능)
+export function mcpRisk(v) {
+  const out = { block: "", warn: [] };
+  let u; try { u = new URL(String(v || "")); } catch { out.block = "주소 형식이 올바르지 않아요"; return out; }
+  if (String(v).length > 300) { out.block = "주소가 너무 길어요"; return out; }
+  if (u.protocol !== "https:" && u.protocol !== "http:") { out.block = "http:// 또는 https:// 주소만 쓸 수 있어요"; return out; }
+  if (u.username || u.password) { out.block = "주소에 아이디·비밀번호가 들어 있어요. 토큰은 따로 입력해 주세요"; return out; }
   const h = u.hostname.toLowerCase();
-  if (!h.includes(".") || h.startsWith("[") || /^\d+(\.\d+){3}$/.test(h)) return false;
-  if (/(^|\.)(localhost|local|internal|lan|home|corp)$/.test(h)) return false;
-  return String(v).length <= 300;
-};
+  const v4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (h.startsWith("[") || h === "localhost" || /(^|\.)(localhost|local|internal|lan|home|corp|intranet)$/.test(h)) { out.block = "내 컴퓨터·내부망 주소라 LAGO 서버가 연결할 수 없어요"; return out; }
+  if (v4) {
+    const [a, b2] = [+v4[1], +v4[2]];
+    if (a === 10 || a === 127 || a === 0 || (a === 169 && b2 === 254) || (a === 172 && b2 >= 16 && b2 <= 31) || (a === 192 && b2 === 168) || a >= 224) { out.block = "내 컴퓨터·내부망 주소라 LAGO 서버가 연결할 수 없어요"; return out; }
+    out.warn.push("도메인이 아니라 IP 주소예요. 누구의 서버인지 알 수 없어요");
+  } else if (!h.includes(".")) { out.block = "도메인이 아니에요 (예: example.com)"; return out; }
+  if (u.protocol === "http:") out.warn.push("https가 아니에요. 주고받는 내용(질문 일부, 토큰)이 암호화되지 않아요");
+  if (u.port) out.warn.push("기본 포트가 아닌 포트(:" + u.port + ")를 써요");
+  if (/(^|\.)xn--/.test(h)) out.warn.push("xn-- 로 시작하는 주소예요. 진짜 사이트를 흉내 낸 글자일 수 있어요");
+  if (/(trycloudflare\.com|ngrok(-free)?\.(io|app|dev)|loca\.lt|serveo\.net|localhost\.run|lhr\.life)$/.test(h)) out.warn.push("임시 터널 주소예요. 언제든 다른 사람의 서버로 바뀔 수 있어요");
+  if (/^(bit\.ly|t\.co|tinyurl\.com|goo\.gl|is\.gd|cutt\.ly)$/.test(h)) out.warn.push("줄임 주소예요. 실제 도착지를 알 수 없어요");
+  return out;
+}
+export const okMcpUrl = (v) => !mcpRisk(v).block;
 
 function parseBody(text, ct) {
   if (/text\/event-stream/.test(ct || "")) {
@@ -102,20 +117,34 @@ export function parseToolCall(ans) {
   return null;
 }
 // llm(system, user) -> { answer } | { status }
-export async function runWithMcp(llm, list, system, user) {
+// opts.allow: 항상 허용한 "서버/도구" 집합, opts.ok: 이번에 허락받은 호출들, opts.no: 거절한 도구 이름들
+// 허락이 없는 도구를 모델이 부르려 하면 실행하지 않고 { pending } 을 돌려줘요.
+export async function runWithMcp(llm, list, system, user, opts = {}) {
   const used = []; let u = user;
+  const allow = opts.allow || new Set(), no = new Set(opts.no || []);
+  const find = (id) => { const [sid, ...rest] = String(id).split("/"), tname = rest.join("/"); const ent = list.find((x) => x.srv.id === sid), tool = ent && ent.tools.find((t) => t.name === tname); return { ent, tool, tname }; };
+  const exec = async (id, args) => {
+    const { ent, tool, tname } = find(id);
+    if (!tool || tool.annotations.destructiveHint === true) return "(없는 도구예요)";
+    try { const c = await mcpCall(ent.srv, tname, args); used.push({ server: ent.srv.name, tool: tname }); return (c.isError ? "(오류) " : "") + c.text; } catch (e) { return "(도구 호출 실패: " + String(e.message || e).slice(0, 120) + ")"; }
+  };
+  const sigs = new Set();
+  for (const o of (opts.ok || []).slice(0, 3)) { const out = await exec(o.tool, o.args); sigs.add(o.tool + "|" + JSON.stringify(o.args || {})); u = `${u}\n\n[도구 결과 ${o.tool}]\n${out}`; }
+  for (const t of no) u = `${u}\n\n[사용자가 도구 ${t} 사용을 거절했어요. 그 도구 없이 답해라.]`;
+  if ((opts.ok || []).length) u += "\n\n위 결과를 바탕으로 질문에 답해라.";
   const tp = toolPrompt(list);
-  if (!tp) return { ...(await llm(system, user)), used };
+  if (!tp) return { ...(await llm(system, u)), used };
   for (let i = 0; i < 3; i++) {
     const r = await llm(system + tp, u);
     if (r.status) return { ...r, used };
     const call = parseToolCall(r.answer);
     if (!call) return { ...r, used };
-    const [sid, ...rest] = call.tool.split("/"), tname = rest.join("/");
-    const ent = list.find((x) => x.srv.id === sid), tool = ent && ent.tools.find((t) => t.name === tname);
+    const { ent, tool } = find(call.tool);
     let out;
     if (!tool || tool.annotations.destructiveHint === true) out = "(없는 도구예요)";
-    else { try { const c = await mcpCall(ent.srv, tname, call.args); out = (c.isError ? "(오류) " : "") + c.text; used.push({ server: ent.srv.name, tool: tname }); } catch (e) { out = "(도구 호출 실패: " + String(e.message || e).slice(0, 120) + ")"; } }
+    else if (no.has(call.tool)) out = "(사용자가 거절했어요)";
+    else if (allow.has(call.tool) || sigs.has(call.tool + "|" + JSON.stringify(call.args || {}))) out = await exec(call.tool, call.args);
+    else return { pending: { tool: call.tool, args: call.args && typeof call.args === "object" ? call.args : {}, server: ent.srv.name, desc: tool.description, host: new URL(ent.srv.url).host, risk: mcpRisk(ent.srv.url).warn }, used };
     u = `${u}\n\n[도구 결과 ${call.tool}]\n${out}\n\n위 결과를 바탕으로 질문에 답해라.`;
   }
   const r = await llm(system, u);
@@ -131,7 +160,7 @@ export async function userServers(env, uid) {
   for (const d of defs) if (d.enabled !== false && !off.includes(d.id) && okMcpUrl(d.url)) out.push({ id: d.id, name: d.name, url: d.url, token: d.token || "" });
   for (const c of st.custom || []) if (c.on !== false && okMcpUrl(c.url)) out.push({ id: c.id, name: c.name, url: c.url, token: c.token || "" });
   for (const id of st.dev || []) { const d = await get("tool:" + id, null); if (d && d.kind === "mcp" && !d.hidden && !(d.emails && d.emails.length) && okMcpUrl(d.mcpUrl)) out.push({ id: "d" + id, name: d.name, url: d.mcpUrl, token: d.mcpToken || "" }); }
-  return out.slice(0, 6);
+  const res = out.slice(0, 6); res.allow = st.allow || []; return res;
 }
 export async function serverTools(servers) {
   const res = await Promise.all(servers.map(async (srv) => { try { return { srv, tools: await mcpTools(srv) }; } catch { return null; } }));
