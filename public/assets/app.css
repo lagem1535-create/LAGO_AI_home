@@ -518,3 +518,5 @@ h1{font-size:30px;line-height:1.2}
 .flyart{background:var(--c)}
 .status.think{background:#EFF3F7;animation:none}.status.think .ic{animation:pulse 1.4s ease-in-out infinite}
 .pop,.cmenu,.acct,.flyout{box-shadow:0 8px 24px rgba(11,31,85,.12)}
+.devb{display:inline-flex;align-items:center;gap:4px;vertical-align:middle;font-size:11px;color:#1B3E9E;background:#EAF0FF;border-radius:99px;padding:1px 8px 1px 3px;line-height:1.6}
+.devb b{font-weight:600;letter-spacing:.03em}

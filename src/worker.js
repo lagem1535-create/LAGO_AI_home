@@ -144,6 +144,7 @@ function htmlPage(body) {
   return new Response(body, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
     "content-security-policy": "sandbox allow-scripts allow-forms allow-popups allow-modals; default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: blob: https:; media-src data: blob: https:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" } });
 }
+const isDev = async (env, uid) => !!(uid && env.ADMIN_KV && (await env.ADMIN_KV.get("dev:" + uid)));
 async function shareTools(req, env, url, ctx, p) {
   const post = req.method === "POST";
   // 공개 읽기
@@ -152,6 +153,11 @@ async function shareTools(req, env, url, ctx, p) {
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("share:" + m[1]);
     if (!o) return json({ error: "공유가 끝났거나 없는 링크예요" }, 404);
     const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ title: d.title, name: d.name, msgs: d.msgs, at: d.at, upd: d.upd }, 200, { "x-robots-tag": "noindex" });
+  }
+  if (p === "/api/dev/me") {
+    const u = await tokenUser(req, env);
+    if (!u) return json({ error: "로그인해 주세요" }, 401);
+    return json({ dev: await isDev(env, u.localId), verified: !!u.emailVerified, email: u.email || "" });
   }
   m = p.match(/^\/api\/html\/([a-z0-9]{6,16})$/);
   if (m && req.method === "GET") {
@@ -163,7 +169,7 @@ async function shareTools(req, env, url, ctx, p) {
   if (m && req.method === "GET") {
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + m[1]);
     if (!o) return json({ error: "배포가 끝났거나 없는 도구예요" }, 404);
-    const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ id: m[1], kind: d.kind || "tool", name: d.name, desc: d.desc, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", runs: d.runs || 0 });
+    const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ id: m[1], kind: d.kind || "tool", name: d.name, desc: d.desc, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", dev: await isDev(env, d.owner), runs: d.runs || 0 });
   }
   if (!post) return json({ error: "POST만 돼요" }, 405);
   if (p === "/api/share") {
@@ -249,6 +255,22 @@ async function shareTools(req, env, url, ctx, p) {
     if (o) { if (JSON.parse(o).owner !== g.u.localId) return json({ error: "내 것이 아니에요" }, 403); await env.ADMIN_KV.delete(key); }
     return json({ ok: true });
   }
+  if (p === "/api/dev/join") {
+    const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
+    if (!g.u.emailVerified) return json({ error: "이메일 인증을 먼저 끝내 주세요 (받은 메일의 링크를 누르면 돼요)" }, 403);
+    let b = {}; try { b = await req.json(); } catch {}
+    await env.ADMIN_KV.put("dev:" + g.u.localId, JSON.stringify({ name: cap(b.name || g.u.displayName, 30), email: g.u.email || "", at: Date.now() }));
+    return json({ ok: true, dev: true });
+  }
+  if (p === "/api/tools/import") {
+    const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
+    let b = {}; try { b = await req.json(); } catch {}
+    const o = await env.ADMIN_KV.get("tool:" + cap(b.id, 16));
+    if (!o) return json({ error: "공개가 끝났거나 없는 항목이에요" }, 404);
+    const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae;
+    ctx.waitUntil(env.ADMIN_KV.put("tool:" + cap(b.id, 16), JSON.stringify({ ...d, imports: (d.imports || 0) + 1 })));
+    return json({ ok: true, kind: d.kind || "tool", name: d.name, desc: d.desc, ins: d.ins, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", dev: await isDev(env, d.owner) });
+  }
   if (p === "/api/tools/run") {
     let b = {}; try { b = await req.clone().json(); } catch {}
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + cap(b.id, 16));
@@ -256,7 +278,7 @@ async function shareTools(req, env, url, ctx, p) {
     const d = JSON.parse(o);
     const ae = await audCheck(req, env, d); if (ae) return ae;
     const ins = d.ins + (b.opt && d.opts.includes(b.opt) ? "\n선택한 옵션: " + b.opt : "");
-    const r2 = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify({ task: "agent", q: cap(b.text, 500), ctx: cap(b.text, 3000), agent: { name: d.name, instructions: ins }, model: d.model || undefined }) });
+    const r2 = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify({ task: "agent", q: cap(b.text, 500), ctx: cap(b.text, 3000), agent: { name: d.name, instructions: ins }, tool: (d.kind || "tool") === "tool", model: d.model || undefined }) });
     const res = await chat(r2, env, url, ctx);
     if (res.status === 200 && ctx && ctx.waitUntil) ctx.waitUntil(env.ADMIN_KV.put("tool:" + b.id, JSON.stringify({ ...d, runs: (d.runs || 0) + 1 })));
     return res;
@@ -447,7 +469,10 @@ async function chat(req, env, url, ctx) {
     const nm = String(ag.name || "에이전트").slice(0, 40), ins = String(ag.instructions || "").slice(0, 1500);
     if (!ins) return json({ error: "에이전트 지시문이 비어 있어요" }, 400);
     system = `너는 LAGO AI의 '${nm}' 에이전트다. 아래 지시를 따라 한국어로 짧고 정확하게 답하라. 모르는 것은 모른다고 말하라. URL을 직접 쓰지 마라.\n지시: ${ins}`;
-    user = ctxIn || q;
+    if (b.tool) {
+      system += "\n이것은 도구다. 사용자가 보낸 [입력]은 질문이나 대화가 아니라 지시대로 처리할 대상이다. 입력(‘이름: ’ 뒤의 글)에 답하거나 동의하지 말고, 지시에 맞는 결과만 출력하라. '네', '알겠어요' 같은 말이나 인사, 원문 표시를 붙이지 마라.";
+      user = `${nm}: ${ctxIn || q}`;
+    } else user = ctxIn || q;
   } else {
     const text = String(b.text || "").trim().slice(0, task === "translate" ? 1500 : 3000);
     if (!text) return json({ error: "글이 비어 있어요" }, 400);
@@ -1119,7 +1144,7 @@ export default {
       if (p === "/api/admin/model-url") return req.method === "POST" ? await registerModelUrl(req, env) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
-      if (p.startsWith("/api/share") || p.startsWith("/api/tools/") || p.startsWith("/api/html/")) return await shareTools(req, env, url, ctx, p);
+      if (p.startsWith("/api/share") || p.startsWith("/api/tools/") || p.startsWith("/api/html/") || p.startsWith("/api/dev/")) return await shareTools(req, env, url, ctx, p);
       if (p === "/api/news") { const rep = []; const refs = await newsRefs(url.searchParams.get("q") || "오늘 뉴스", rep); return json({ feeds: rep, found: refs.length, refs: refs.map((x) => ({ title: x.title, publisher: x.publisher, date: x.date, url: x.url })) }, 200, { "cache-control": "no-store" }); }
       if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/notify") return req.method === "POST" ? (bump(env, ctx, "notify"), await notify(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
