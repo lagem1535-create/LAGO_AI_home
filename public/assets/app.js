@@ -45,7 +45,7 @@ const me=()=>S.goccia?{name:"지우",plan:"Goccia",email:"kid"}:S.user;
 const allAgents=()=>[...S.myAgents,...OFFICIAL];
 const agentById=id=>allAgents().find(a=>a.id===id);
 /* ---------- router ---------- */
-const ROUTES=["dev","html-pub","shared","tools","tool-new","tool-my","tool-pub","share-view","tool-translate","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin","admin-user"];
+const ROUTES=["dev","html-pub","shared","tools","tool-new","tool-my","tool-pub","share-view","tool-translate","tool-spell","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin","admin-user"];
 const PUBLIC=["html-pub","login","join","verify","kid","terms","share-view","tool-pub"];
 const PATHMODE=(()=>{const m=document.querySelector('meta[name="lago-router"]');return !!m&&m.content==="path"&&/^https?:$/.test(location.protocol)&&!!history.pushState;})();
 /* 주소: 서버에서는 /chat, /chat/<대화번호>, /admin/user 처럼 실제 경로를 써요. 미리보기(한 파일)에서는 #chat 처럼 #을 써요. */
@@ -118,6 +118,7 @@ const HUB=["tools","agents","agent","agent-new","tool-new","tool-my"];
 function hubHead(on,btn){return `<div class="row phead"><div class="grow"><h1>TOOLS / MODES</h1><p class="muted" style="margin:0">MODE는 답하는 방식, TOOLS는 글이나 파일로 하는 일이에요. 만든 것은 프로필 → 공유에서 링크로 공유해요.</p></div>${btn||""}</div><div class="tabs" role="tablist"><button role="tab" aria-selected="${on==="mode"}" data-go="agents">MODE</button><button role="tab" aria-selected="${on==="tools"}" data-go="tools">TOOLS</button></div>`;}
 const TOOLS=[
 {id:"translate",route:"tool-translate",lab:"문서 번역",ic:"scale",c:"#1B3E9E",d:"모델이 연결되는 베타 때 열려요. 문서의 모양은 그대로 두고 원하는 언어로 번역해요.",steps:["글을 붙여 넣거나 파일을 올려요 (PDF · DOCX · PPTX · XLSX)","번역할 언어를 고르고 번역을 시작해요","결과에서 번역본과 원문을 나란히 비교해요"],cta:"문서 번역 열기"},
+{id:"spell",route:"tool-spell",lab:"맞춤법 검사",ic:"check",c:"#2BA3B8",d:"글의 맞춤법과 띄어쓰기를 고치고, 고친 곳을 알려 줘요.",steps:["고칠 글을 붙여 넣어요 (1,500자까지)","검사를 시작해요","고친 글과 고친 곳을 확인해요"],cta:"맞춤법 검사 열기"},
 {id:"extract",route:"tool-extract",lab:"텍스트 추출",ic:"file",c:"#2BA3B8",d:"이미지나 PDF 속 글자를 뽑아서 복사할 수 있게 해요.",steps:["이미지나 PDF 파일을 올려요","글자를 뽑을 부분을 정해요","뽑힌 글자를 복사하거나 대화로 보내요"],cta:"텍스트 추출 열기"},
 {id:"summary",route:"tool-summary",lab:"문서 요약",ic:"news",c:"#4A5FA8",d:"긴 글을 핵심만 짧게 정리해요. 근거 문장도 함께 보여 줘요.",steps:["요약할 글을 붙여 넣거나 파일을 올려요","길이를 골라요 (3줄 · 5줄 · 한 문단)","핵심 문장과 근거 위치를 확인해요"],cta:"문서 요약 열기"}];
 const SERVICES=[["gcal","Google Calendar","일정을 보고, 새 일정을 만들어요.","로그인 필요","#1A73E8"],["gmail","Gmail","메일을 찾아 읽고, 답장 초안을 써요.","로그인 필요","#D93025"],["gdrive","Google Drive","드라이브의 파일을 찾아 읽어요.","로그인 필요","#188038"],["notion","Notion","Notion 페이지를 읽고 정리해요.","로그인 필요","#1F2937"],["m365mail","M365 메일 · 일정","승인 없이 바로 메일, 일정, 팀즈 채팅을 써요.","로그인 필요","#5B5FC7"],["m365files","M365 파일 · 회의실","관리자 승인 뒤에 원드라이브 파일과 회의실을 써요.","관리자 승인","#5B5FC7"]];
@@ -371,6 +372,7 @@ if(id==="translate"&&modelOn())form=`<div class="note">${ic("info",16)}<span>Fon
 else if(id==="translate")form=`<div class="note">${ic("info",16)}<span>번역은 LAGO 모델이 연결되는 <b>베타</b> 때 열려요. 모델 없이 거짓 번역을 보여 드리지 않으려고 지금은 닫아 두었어요.</span></div>
 <label class="fld">번역할 글<textarea id="ti" rows="6" placeholder="베타 때 여기에 붙여 넣어요" maxlength="4000" style="resize:vertical" disabled>${esc(dr.text||"")}</textarea></label>
 <div class="row" style="gap:10px;flex-wrap:wrap"><label class="fld" style="flex:1;min-width:150px">어떤 언어로<select id="to" disabled>${LANG.map(l=>`<option>${l}</option>`).join("")}</select></label></div>`;
+if(id==="spell")form=modelOn()?`<div class="note">${ic("info",16)}<span>Fonte 모델이 맞춤법과 띄어쓰기를 고쳐요. 맞춤법을 따로 학습하지 않아서 틀릴 수 있어요.</span></div><label class="fld">고칠 글<textarea id="ti" rows="6" placeholder="맞춤법을 확인할 글을 붙여 넣어 주세요" maxlength="1500" style="resize:vertical">${esc(dr.text||"")}</textarea></label>`:`<div class="note">${ic("info",16)}<span>맞춤법 검사는 LAGO 모델이 연결되는 <b>베타</b> 때 열려요.</span></div>`;
 if(id==="extract")form=`<label class="fld">파일 올리기<input id="tf2" type="file" accept=".pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.srt,.log,image/*"></label>
 <p class="muted" style="font-size:12.5px;margin:0">PDF · Word(DOCX) · 텍스트 파일은 바로 글자를 뽑아요. 사진·스캔 이미지는 글자 인식(OCR)을 쓰는데, 처음에는 언어 파일을 받느라 1~2분 걸릴 수 있어요. 파일은 이 브라우저에서만 읽고 서버로 보내지 않아요. 파일 크기는 15MB까지예요.</p>`;
 if(id==="summary")form=`<label class="fld">요약할 글<textarea id="ti" rows="8" placeholder="요약할 글을 붙여 넣어 주세요" maxlength="30000" style="resize:vertical">${esc(dr.text||"")}</textarea></label>
@@ -410,7 +412,8 @@ const f={};sents.forEach(x=>new Set(toks(x)).forEach(w=>f[w]=(f[w]||0)+1));
 const sc=sents.map((x,i)=>{const t=toks(x);const base=t.length?t.reduce((a,w)=>a+(f[w]>1?f[w]:0.3),0)/Math.pow(t.length,0.6):0;return {i,x,s:base*(i===0?1.35:i<3?1.1:1)*(x.length>260?0.7:1)};});
 const pick=[];for(const c of sc.slice().sort((a,b)=>b.s-a.s)){if(pick.length>=n)break;const ct=new Set(toks(c.x));if(pick.some(p=>{const pt=toks(p.x);const hit=pt.filter(w=>ct.has(w)).length;return hit/Math.max(1,Math.min(pt.length,ct.size))>0.7;}))continue;pick.push(c);}
 return {pick:pick.sort((a,b)=>a.i-b.i)};}
-async function toolAnswer(kind,text,opt,file,def){const t=kind==="custom"?{id:"custom",lab:def.name,ic:"bot"}:TOOLS.find(x=>x.id===kind);
+const SPELL_INS=`입력한 글의 맞춤법과 띄어쓰기를 바로잡아라. 뜻과 말투는 바꾸지 말고 틀린 곳만 고쳐라.\n출력 형식은 반드시 이렇게 한다.\n(고친 글 전체)\n\n고친 곳\n- 틀린 말 → 바른 말 (이유 한 줄)\n틀린 곳이 없으면 글을 그대로 쓰고 "고칠 곳이 없어요"라고만 덧붙여라.\n\n예시\n이제 집에 가도 되요?웬지 오늘은 좋은 일이 생길 것 같아!\n=>\n이제 집에 가도 돼요? 왠지 오늘은 좋은 일이 생길 것 같아!\n\n고친 곳\n- 되요 → 돼요 ('되어요'의 줄임말은 '돼요')\n- 웬지 → 왠지 ('왜인지'의 줄임말)\n- 물음표 뒤에 띄어쓰기를 넣었어요`;
+async function toolAnswer(kind,text,opt,file,def){if(kind==="spell"){kind="custom";def={name:"맞춤법 검사",ins:SPELL_INS,model:""};}const t=kind==="custom"?{id:"custom",lab:def.name,ic:"bot"}:TOOLS.find(x=>x.id===kind);
 try{let body=text,how="";
 if(file){const r=await readFileText(file);body=r.text;how=r.how;}
 if(!body||!body.trim())return{html:`<span class="status">${ic(t.ic,14)} ${t.lab}</span><p class="answer">${file?"파일에서 글자를 찾지 못했어요. 글자가 없는 스캔 파일이거나 사진이 흐릴 수 있어요. 사진은 ‘이미지’로 올리면 글자 인식(OCR)을 해요.":"글이 비어 있어요."}</p>`,plain:"글자 없음",meta:t.lab};
@@ -548,15 +551,15 @@ const opt=t&&t.opts.length?`<select id="selopt" class="selopt" aria-label="${t.i
 return `<div class="selrow">${t?`<span class="selchip" style="--c:${t.c}">${ic(t.ic,14)}<b>${esc(t.lab)}</b><button type="button" class="x" data-act="toolClear" aria-label="도구 선택 해제">${ic("x",12)}</button></span>${opt}`:""}${a?`<span class="selchip att">${a.kind==="image"&&a.thumb?`<img src="${a.thumb}" alt="">`:ic("file",14)}<b>${esc(a.name)}</b><small>${fmtSize(a.size)}</small><button type="button" class="x" data-act="attClear" aria-label="첨부 지우기">${ic("x",12)}</button></span>`:""}</div>`;}
 async function runTool(k,o){const raw=(o.raw||"").trim(),file=o.file||null,opt=o.opt||"",def=o.def||null;
 const lab=def?def.name:TOOLS.find(x=>x.id===k).lab;const thumb=o.thumb!=null?o.thumb:(file?await makeThumb(file):"");const att=attOf(file,raw,thumb);
-let disp=k==="extract"?"글자를 뽑아 줘":k==="translate"?`${opt}로 번역해 줘`:k==="summary"?`${opt}로 요약해 줘`:(opt?opt+" · ":"")+(def?def.name:"")+" 실행";
-if(!att&&raw)disp=k==="custom"?(opt?opt+" · ":"")+raw:disp+": "+raw;
+let disp=k==="extract"?"글자를 뽑아 줘":k==="translate"?`${opt}로 번역해 줘`:k==="summary"?`${opt}로 요약해 줘`:(opt?opt+" · ":"")+(def?def.name:lab)+" 실행";
+if(!att&&raw)disp=k==="custom"?(opt?opt+" · ":"")+lab+": "+raw:k==="spell"?lab+": "+raw:disp+": "+raw;
 if(!o.keep){S.area="talk";S.cur=null;S.temp=false;}
 send(disp,{tool:k,raw,opt,file,def,att});
 const c=curChat();if(c&&c.msgs.length<=2){c.title=lab+" · "+(file?file.name:raw.slice(0,16)||lab);}save();}
 function composerSend(text){text=(text||"").trim();const tid=S.selTool,at=S.att,q=$("#q");
 if(!tid&&!at){if(q)q.value="";send(text);return;}
 if(tid){const d=toolDef(tid);if(!d){S.selTool=null;render();return;}if(!text&&!at){toast("글을 쓰거나 파일을 올려 주세요");return;}
- const k=tid.startsWith("u:")?"custom":tid;if(k==="translate"&&!modelOn()){toast("번역은 모델이 연결되는 베타 때 열려요");return;}
+ const k=tid.startsWith("u:")?"custom":tid;if((k==="translate"||k==="spell")&&!modelOn()){toast("이 도구는 모델이 연결되는 베타 때 열려요");return;}
  const opt=S.selOpt||d.opts[0]||"";S.selTool=null;S.att=null;S.selOpt=null;if(q)q.value="";
  runTool(k,{raw:text,opt,file:at?at.file:null,def:k==="custom"?d.def:null,keep:true,thumb:at?at.thumb:""});return;}
 S.att=null;if(q)q.value="";send(text||"이 파일 내용을 알려 줘",{ctxFile:at.file,att:{kind:at.kind,name:at.name,size:at.size,thumb:at.thumb}});}
@@ -654,6 +657,8 @@ function trustModal(){const x=S.trust,t=x.t;return `<div class="tempask" role="d
 <span class="muted" style="font-size:13px">‘${esc(t.name)}’을(를) 내 ${t.kind==="mode"?"MODE":"TOOLS"}에 넣으면 만든 사람의 <b>지시문이 함께 복사돼요</b>. 내용은 넣은 뒤 ‘고치기’에서 확인할 수 있어요. 믿을 수 있는 사람의 것만 넣어 주세요.</span>
 <p class="err" id="trerr" role="alert">${esc(x.err||"")}</p>
 <div class="row" style="gap:8px;justify-content:flex-end"><button class="btn" data-act="trustNo">취소</button><button class="btn pri" data-act="trustYes" ${x.busy?"disabled":""}>${x.busy?"넣는 중…":"신뢰하고 넣기"}</button></div></div></div>`;}
+function devMine(){const o=location.origin,it=[...S.myAgents.filter(a=>a.viaDev&&a.pub).map(a=>({k:"mode",id:a.id,name:a.name,link:o+"/t/"+a.pub.id})),...(S.myTools||[]).filter(t=>t.viaDev&&t.pub).map(t=>({k:"tool",id:t.id,name:t.name,link:o+"/t/"+t.pub.id}))];
+return `<div class="card" style="display:grid;gap:10px"><div class="row" style="gap:8px"><b style="font-size:16px">내가 DEV에서 올린 것</b><span class="muted">${it.length}</span></div>${it.length?it.map(x=>`<div style="display:grid;gap:6px;padding:10px 0;border-top:1px solid var(--line)"><div class="row" style="gap:8px"><span class="tag" style="background:#EEF2F8;color:var(--mut)">${x.k==="mode"?"MODE":"TOOL"}</span><b class="grow">${esc(x.name)}</b>${DEVB}</div><div class="muted" style="font:12.5px var(--mono);word-break:break-all">${esc(x.link)}</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm pri" data-act="copy" data-text="${esc(x.link)}">${ic("copy",14)} 링크 복사</button><a class="btn sm" href="${esc(x.link)}" target="_blank" rel="noopener">열기</a><button class="btn sm danger" data-act="unshare" data-k="${x.k}" data-id="${x.id}" ${S.pubBusy?"disabled":""}>공개 내리기</button></div></div>`).join(""):`<p class="muted" style="margin:0;font-size:13px">아직 DEV에서 올린 게 없어요. 위에서 만들어 공개하면 여기에 모여요.</p>`}</div>`;}
 function vDev(){const st=S.devSt;if(!st&&S.user&&S.user.uid){S.devSt={loading:true};authGet("/api/dev/me").then(r=>r.json().then(j=>({ok:r.ok,j}))).then(x=>{S.devSt=x.ok?x.j:{err:x.j.error||"확인하지 못했어요"};render();}).catch(()=>{S.devSt={err:"확인하지 못했어요"};render();});}
 const d=S.devSt||{},q=S.devQ||{kind:"mode"};let body;
 if(!(PATHMODE&&S.user&&S.user.uid))body=`<div class="note">${ic("info",16)}<span>LAGO DEV는 로그인한 실제 서비스에서만 쓸 수 있어요.</span></div>`;
@@ -667,7 +672,7 @@ else body=`<div class="card" style="display:grid;gap:12px"><div class="row" styl
 <label class="fld">${q.kind==="mode"?"어떻게 답할지":"무엇을 할지"}<textarea id="dvI" rows="5" maxlength="1500" style="resize:vertical" placeholder="${q.kind==="mode"?"예: 영어로 먼저 말하고 한국어로 짧게 풀어 줘":"예: 글의 맞춤법을 고쳐 줘"}">${esc(q.ins||"")}</textarea></label>${modelSel("dvM",q.model)}
 <p class="err" id="dverr" role="alert">${esc(S.devMsg||"")}</p><div class="row" style="gap:8px;justify-content:flex-end"><button class="btn pri" ${S.devBusy?"disabled":""}>${S.devBusy?"만드는 중…":"만들고 바로 공개"}</button></div></form>
 ${q.link?`<div class="note">${ic("check",16)}<span>공개했어요: ${esc(q.link)}</span><button class="btn sm pri" style="margin-left:auto" data-act="copy" data-text="${esc(q.link)}">복사</button></div>`:""}
-<p class="muted" style="margin:0;font-size:12.5px">공개한 것은 프로필 → 공유에서 관리해요. MCP 연결은 준비 중이에요.</p></div>`;
+<p class="muted" style="margin:0;font-size:12.5px">MCP 연결은 준비 중이에요.</p></div>${devMine()}`;
 return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:760px;display:grid;gap:16px"><div><h1 style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">LAGO DEV ${d.dev?DEVB:""}</h1><p class="muted" style="margin:4px 0 0">이메일 인증을 마친 개발자가 MODE와 TOOL을 빠르게 만들어 공개하는 곳이에요.</p></div>${body}</div></div>`);}
 function vToolPub(){const id=S.tpId,st=S.tp&&S.tp.id===id?S.tp:null;if(!st){S.tp={id,loading:true};authGet("/api/tools/"+encodeURIComponent(id)).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(x=>{S.tp={id,data:x.ok?x.j:null,err:x.ok?"":x.j.error||"없는 도구예요",login:!x.ok&&!!x.j.needLogin};render();}).catch(()=>{S.tp={id,err:"불러오지 못했어요"};render();});}
 const t=st&&st.data;let body="";
@@ -708,9 +713,9 @@ if(S.booting&&!S.user){$("#app").innerHTML=`<div class="splash" role="status" ar
 if(S.banned&&S.user){$("#app").innerHTML=vBanned();return;}
 if(!S.user&&!PUBLIC.includes(r)){if(PATHMODE&&!S.after)S.after=location.pathname;go("login",true);return;}
 if(S.user&&(r==="login"||r==="join")){go("home",true);return;}
-if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-extract","tool-summary","tools","tool-new","tool-my","tool-pub"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");go("home",true);return;}
+if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-spell","tool-extract","tool-summary","tools","tool-new","tool-my","tool-pub"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");go("home",true);return;}
 if(r==="code"||r==="code-chat"||r==="code-folder")S.area="code";else if(["home","chat","projects","project","agents","agent","agent-new"].includes(r))S.area="talk";
-const v={dev:vDev,"html-pub":vHtmlPub,shared:vShared,tools:vTools,"tool-new":vToolNew,"tool-my":vToolMy,"tool-pub":vToolPub,"share-view":vShareView,"tool-translate":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
+const v={dev:vDev,"html-pub":vHtmlPub,shared:vShared,tools:vTools,"tool-new":vToolNew,"tool-my":vToolMy,"tool-pub":vToolPub,"share-view":vShareView,"tool-translate":vTool,"tool-spell":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
 const html=v();if(!html)return;const rk=location.pathname+location.hash,oldSc=document.querySelector(".main > .scroll"),keepTop=oldSc&&S.rk===rk?oldSc.scrollTop:0,qv=S.rk===rk&&$("#q")?$("#q").value:"";S.rk=rk;$("#app").innerHTML=html;fitPop();requestAnimationFrame(fitPop);if(keepTop){const ns=document.querySelector(".main > .scroll");if(ns&&!$("#sc"))ns.scrollTop=keepTop;}
 const sc=$("#sc");if(sc)sc.scrollTop=sc.scrollHeight;
 if($("#bc"))startBrand();
@@ -907,8 +912,8 @@ if(f.id==="loginForm"){const em=$("#le").value.trim().toLowerCase(),pw=$("#lp").
  S.user={email:em,name:u.name,plan:u.plan||"Free"};store.set("lago_session",S.user);loadUser();toast(u.name+"님, 다시 오신 걸 환영해요");go("home");return;}
 if(f.id==="devForm"){e.preventDefault();const q=S.devQ={...(S.devQ||{kind:"mode"}),name:$("#dvN").value.trim(),ins:$("#dvI").value.trim(),model:$("#dvM").value};if(q.name.length<2||q.ins.length<5){S.devMsg="이름과 내용을 적어 주세요.";render();return;}
 S.devBusy=true;S.devMsg="";q.link="";render();try{const base={name:q.name,desc:q.ins.slice(0,60),ins:q.ins,model:q.model,showName:true,ownerName:S.user.name,emails:[],invite:false};let it;
-if(q.kind==="mode"){it={ic:"bot",c:"#1B3E9E",mode:"Torrente",web:0,name:q.name,desc:q.ins.slice(0,60),ins:q.ins,starters:[],model:q.model,id:"m"+Date.now(),mine:true,cat:"내 MODE",showName:true};const j=await pubFetch("/api/tools/publish",{...base,kind:"mode",input:"text",starters:[]});it.pub={id:j.id};S.myAgents.unshift(it);q.link=location.origin+"/t/"+j.id;}
-else{it={name:q.name,desc:q.ins.slice(0,60),ins:q.ins,input:"both",opts:[],model:q.model,id:"u"+Date.now().toString(36),showName:true};const j=await pubFetch("/api/tools/publish",{...base,kind:"tool",input:"both",opts:[]});it.pub={id:j.id};S.myTools=[it,...(S.myTools||[])];q.link=location.origin+"/t/"+j.id;}
+if(q.kind==="mode"){it={ic:"bot",c:"#1B3E9E",mode:"Torrente",web:0,name:q.name,desc:q.ins.slice(0,60),ins:q.ins,starters:[],model:q.model,id:"m"+Date.now(),mine:true,cat:"내 MODE",showName:true,viaDev:true};const j=await pubFetch("/api/tools/publish",{...base,kind:"mode",input:"text",starters:[]});it.pub={id:j.id};S.myAgents.unshift(it);q.link=location.origin+"/t/"+j.id;}
+else{it={name:q.name,desc:q.ins.slice(0,60),ins:q.ins,input:"both",opts:[],model:q.model,id:"u"+Date.now().toString(36),showName:true,viaDev:true};const j=await pubFetch("/api/tools/publish",{...base,kind:"tool",input:"both",opts:[]});it.pub={id:j.id};S.myTools=[it,...(S.myTools||[])];q.link=location.origin+"/t/"+j.id;}
 q.name="";q.ins="";save();toast("만들고 공개했어요");}catch(er){S.devMsg=er.message;}S.devBusy=false;render();return;}
 if(f.id==="joinForm"){const n=$("#jn").value.trim(),em=$("#je").value.trim().toLowerCase(),pw=$("#jp").value,err=$("#jerr");
  if(!n){err.textContent="이름을 입력해 주세요.";$("#jn").focus();return;}
@@ -924,7 +929,7 @@ if(f.id==="joinForm"){const n=$("#jn").value.trim(),em=$("#je").value.trim().toL
  store.set("lago_data_"+em,{chats:[],learn:$("#jl").checked,learnImg:$("#jl").checked});
  S.pendingVerify=em;go("verify");return;}
 if(f.id==="toolForm"){const k=f.dataset.tool,raw=($("#ti")?$("#ti").value.trim():""),op=$("#to")?$("#to").value:"",fl=$("#tf2")&&$("#tf2").files&&$("#tf2").files[0],err=$("#toolerr");
- if(k==="translate"&&!modelOn()){err.textContent="번역은 모델이 연결되는 베타 때 열려요.";return;}
+ if((k==="translate"||k==="spell")&&!modelOn()){err.textContent="이 도구는 모델이 연결되는 베타 때 열려요.";return;}
  if(!raw&&!fl){err.textContent=k==="extract"?"파일을 올려 주세요.":"글을 붙여 넣거나 파일을 올려 주세요.";return;}
  if(fl&&fl.size>15*1024*1024){err.textContent="파일이 너무 커요. 15MB 이하로 올려 주세요.";return;}
  err.textContent="";S.toolIn={text:raw,opt:op};runTool(k,{raw,opt:op,file:fl||null});return;}
