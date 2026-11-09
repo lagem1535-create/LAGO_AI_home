@@ -154,6 +154,24 @@ async function shareTools(req, env, url, ctx, p) {
     if (!o) return json({ error: "공유가 끝났거나 없는 링크예요" }, 404);
     const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ title: d.title, name: d.name, msgs: d.msgs, at: d.at, upd: d.upd }, 200, { "x-robots-tag": "noindex" });
   }
+  if (p === "/api/dev/list" && req.method === "GET") {
+    const u = await tokenUser(req, env);
+    if (!u) return json({ error: "로그인해 주세요" }, 401);
+    const out = []; let cur;
+    for (let n = 0; n < 5; n++) {
+      const l = await env.ADMIN_KV.list({ prefix: "tool:", cursor: cur, limit: 200 });
+      for (const k of l.keys) {
+        const o = await env.ADMIN_KV.get(k.name); if (!o) continue;
+        let d; try { d = JSON.parse(o); } catch { continue; }
+        if (!d.viaDev || (d.emails && d.emails.length)) continue;
+        if (!(await isDev(env, d.owner))) continue;
+        out.push({ id: k.name.slice(5), kind: d.kind || "tool", name: d.name, desc: d.desc || "", owner: d.ownerName || "", at: d.at || 0, runs: d.runs || 0, mine: d.owner === u.localId });
+      }
+      if (l.list_complete) break; cur = l.cursor;
+    }
+    out.sort((x, y) => y.at - x.at);
+    return json({ items: out.slice(0, 100) });
+  }
   if (p === "/api/dev/me") {
     const u = await tokenUser(req, env);
     if (!u) return json({ error: "로그인해 주세요" }, 401);
@@ -207,7 +225,7 @@ async function shareTools(req, env, url, ctx, p) {
     let b = {}; try { b = await req.json(); } catch {}
     const name = cap(b.name, 30).trim(), ins = cap(b.ins, 1500).trim();
     if (!name || !ins) return json({ error: "이름과 지시문이 필요해요" }, 400);
-    const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now(), kind: b.kind === "mode" ? "mode" : "tool", starters: (Array.isArray(b.starters) ? b.starters : []).slice(0, 3).map((x) => cap(x, 80)).filter(Boolean), model: okModel(b.model), emails: normEmails(b.emails) };
+    const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now(), kind: b.kind === "mode" ? "mode" : "tool", starters: (Array.isArray(b.starters) ? b.starters : []).slice(0, 3).map((x) => cap(x, 80)).filter(Boolean), model: okModel(b.model), emails: normEmails(b.emails), viaDev: !!b.viaDev && await isDev(env, g.u.localId) };
     let id = /^[a-z0-9]{6,16}$/.test(b.id || "") ? b.id : "";
     if (id) {
       const old = await env.ADMIN_KV.get("tool:" + id);
