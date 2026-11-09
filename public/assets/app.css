@@ -533,26 +533,22 @@ h1{font-size:30px;line-height:1.2}
 
 .umw .uchip{align-self:flex-end;background:#EFF3F7;color:var(--mut)}
 
-.shopsearch{display:flex;align-items:center;gap:10px;background:#EFF3F7;border-radius:12px;padding:0 14px;max-width:540px;width:100%;justify-self:center;color:var(--mut)}
-.shopsearch input{border:0;background:none;padding:12px 0;flex:1;min-width:0;font-size:15px;box-shadow:none}
-.shopsearch input:focus-visible{outline:none}.shopsearch:focus-within{box-shadow:0 0 0 2px var(--blue)}
-.shophero{background:#0B1F55;color:#fff;border-radius:22px;padding:30px 32px;display:flex;align-items:center;justify-content:space-between;gap:20px;overflow:hidden}
-.shophero h1{margin:0 0 6px;font-size:28px;color:#fff;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.shophero p{margin:0 0 16px;opacity:.85;font-size:15px}
-.shopart{opacity:.28;flex:none;transform:scale(2.2);margin-right:36px}
-.shopchip{border:1px solid rgba(255,255,255,.5);background:none;color:#fff;border-radius:999px;padding:7px 16px;font-size:13.5px;cursor:pointer}
-.shopchip[aria-pressed=true]{background:#fff;color:#0B1F55;border-color:#fff;font-weight:600}
-.shopsec{display:grid;gap:12px}.shopsec .row{align-items:baseline;gap:10px}.shopsec h2{margin:0;font-size:21px}
-.shopgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
-.shopcard{display:grid;gap:0;align-content:start;background:#F3F6FA;border-radius:18px;padding:10px;text-decoration:none;color:inherit;min-width:0;transition:background .15s}
-.shopcard:hover{background:#E9EFF7}
-.shopimg{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#fff}
+.shopsearch{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:0 12px;max-width:520px;width:100%;color:var(--mut)}
+.shopsearch input{border:0;background:none;padding:10px 0;flex:1;min-width:0;font-size:15px;box-shadow:none}
+.shopsearch input:focus-visible{outline:none}.shopsearch:focus-within{border-color:var(--blue)}
+.shophead h1{margin:0 0 4px;font-size:24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.shophead p{margin:0 0 12px;color:var(--mut);font-size:14px}
+.shopsec{display:grid;gap:10px}.shopsec .row{align-items:baseline;gap:10px}.shopsec h2{margin:0;font-size:17px}
+.shopgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.shopcard{display:grid;align-content:start;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;text-decoration:none;color:inherit;min-width:0}
+.shopcard:hover{border-color:var(--blue)}
+.shopimg{position:relative;aspect-ratio:16/9;background:#EFF3F7;border-bottom:1px solid var(--line)}
 .shopimg img{width:100%;height:100%;object-fit:cover;display:block}
-.shopimg .gen{width:100%;height:100%;display:grid;place-content:center;justify-items:center;gap:6px;color:#fff;text-align:center;padding:8px}
-.shopimg .gen b{font-size:15px;line-height:1.25;overflow-wrap:anywhere}
-.shopk{position:absolute;left:8px;top:8px;background:rgba(255,255,255,.92);color:#0B1F55}
-.shopb{display:grid;gap:5px;padding:10px 4px 4px;min-width:0}
-.shopn{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shopimg .gen{width:100%;height:100%;display:grid;place-content:center;text-align:center;padding:10px}
+.shopimg .gen b{font-size:17px;line-height:1.3;overflow-wrap:anywhere}
+.shopk{position:absolute;left:8px;top:8px;background:#fff;color:var(--ink2);border:1px solid var(--line);font-size:11px}
+.shopb{display:grid;gap:4px;padding:10px 12px 12px;min-width:0}
+.shopn{font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .shopd{font-size:13px;color:var(--ink2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.9em}
 .shopm{font-size:12px;color:var(--mut)}
-@media (max-width:600px){.shophero{padding:22px 20px}.shophero h1{font-size:23px}.shopart{display:none}.shopgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+@media (max-width:600px){.shopgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
