@@ -126,35 +126,66 @@ export function parseToolCall(ans) {
 // opts.allow: 항상 허용한 "서버/도구" 집합, opts.ok: 이번에 허락받은 호출들, opts.no: 거절한 도구 이름들
 // 허락이 없는 도구를 모델이 부르려 하면 실행하지 않고 { pending } 을 돌려줘요.
 export async function runWithMcp(llm, list, system, user, opts = {}) {
-  const used = []; let u = user;
+  const used = [], results = [];
+  const q = opts.q || "";
   const allow = opts.allow || new Set(), no = new Set(opts.no || []);
   const find = (id) => { const [sid, ...rest] = String(id).split("/"), tname = rest.join("/"); const ent = list.find((x) => x.srv.id === sid), tool = ent && ent.tools.find((t) => t.name === tname); return { ent, tool, tname }; };
+  const safe = (t) => t.annotations.destructiveHint !== true;
   const exec = async (id, args) => {
     const { ent, tool, tname } = find(id);
-    if (!tool || tool.annotations.destructiveHint === true) return "(없는 도구예요)";
+    if (!tool || !safe(tool)) return "(없는 도구예요)";
     try { const c = await mcpCall(ent.srv, tname, args); used.push({ server: ent.srv.name, tool: tname }); return (c.isError ? "(오류) " : "") + c.text; } catch (e) { return "(도구 호출 실패: " + String(e.message || e).slice(0, 120) + ")"; }
   };
+  // 최종 답: 도구 결과를 학습된 '참고자료' 형식으로 넣어요 (FACT 모델이 근거로 읽어요)
+  const finalAsk = () => {
+    const refs = results.map((r, i) => `[${i + 1}] (${r.tool}) ${r.out}`).join("\n");
+    const note = no.size ? "\n(사용자가 일부 도구 사용을 거절했어요. 그 도구 없이 답해라.)" : "";
+    return llm(system + (results.length ? "\n도구 결과를 근거로 답하고 [번호]를 붙여라." : ""), results.length || no.size ? `참고자료:\n${refs}${note}\n\n질문: ${q || user}` : user);
+  };
   const sigs = new Set();
-  for (const o of (opts.ok || []).slice(0, 3)) { const out = await exec(o.tool, o.args); sigs.add(o.tool + "|" + JSON.stringify(o.args || {})); u = `${u}\n\n[도구 결과 ${o.tool}]\n${out}`; }
-  for (const t of no) u = `${u}\n\n[사용자가 도구 ${t} 사용을 거절했어요. 그 도구 없이 답해라.]`;
-  if ((opts.ok || []).length) u += "\n\n위 결과를 바탕으로 질문에 답해라.";
+  for (const o of (opts.ok || []).slice(0, 3)) { const out = await exec(o.tool, o.args); sigs.add(o.tool + "|" + JSON.stringify(o.args || {})); results.push({ tool: o.tool, out }); }
   const tp = toolPrompt(list);
-  if (!tp) return { ...(await llm(system, u)), used };
+  if (!tp) return { ...(await finalAsk()), used };
+  const doneTools = new Set(results.map((r) => r.tool));
   for (let i = 0; i < 3; i++) {
-    const r = await llm(system + tp, u);
+    // 1) 도구 선택 전용 호출 (FACT 시스템 문장 대신 도구 선택기 문장을 써요)
+    const ctxTxt = results.map((r) => `[결과 ${r.tool}] ${r.out}`).join("\n");
+    const router = "너는 도구 선택기다. 사용자의 질문에 아래 도구가 도움이 되면 다른 말 없이 JSON 한 줄만 출력해라: {\"tool\":\"서버/도구\",\"args\":{...}}\n도구가 필요 없거나 이미 결과가 충분하면 NONE 한 단어만 출력해라. 질문에 서버 이름이나 도구 이름이 나오면 그 서버의 도구를 골라라." + tp.replace(/^[\s\S]*?\n(- )/, "\n$1");
+    const r = await llm(router, `질문: ${q || user}${ctxTxt ? "\n" + ctxTxt : ""}`);
     if (r.status) return { ...r, used };
-    const call = parseToolCall(r.answer);
-    if (!call) return { ...r, used };
+    let call = parseToolCall(r.answer);
+    // 2) 모델이 못 골랐으면 질문과 도구 이름·설명이 겹치는 도구를 골라요 (인자가 필요 없는 것만)
+    if (!call && !/\bNONE\b/.test(String(r.answer || "")) || (!call && i === 0)) call = guessCall(list, q || user, doneTools);
+    if (!call) break;
     const { ent, tool } = find(call.tool);
     let out;
-    if (!tool || tool.annotations.destructiveHint === true) out = "(없는 도구예요)";
-    else if (no.has(call.tool)) out = "(사용자가 거절했어요)";
-    else if (allow.has(call.tool) || sigs.has(call.tool + "|" + JSON.stringify(call.args || {}))) out = await exec(call.tool, call.args);
+    if (!tool || !safe(tool)) break;
+    else if (no.has(call.tool)) { doneTools.add(call.tool); continue; }
+    else if (allow.has(call.tool) || sigs.has(call.tool + "|" + JSON.stringify(call.args || {}))) { out = await exec(call.tool, call.args); results.push({ tool: call.tool, out }); doneTools.add(call.tool); }
     else return { pending: { tool: call.tool, args: call.args && typeof call.args === "object" ? call.args : {}, server: ent.srv.name, desc: tool.description, host: new URL(ent.srv.url).host, risk: mcpRisk(ent.srv.url).warn }, used };
-    u = `${u}\n\n[도구 결과 ${call.tool}]\n${out}\n\n위 결과를 바탕으로 질문에 답해라.`;
   }
-  const r = await llm(system, u);
-  return { ...r, used };
+  return { ...(await finalAsk()), used };
+}
+
+const words = (t) => String(t || "").toLowerCase().split(/[^0-9a-z가-힣]+/).filter((w) => w.length >= 2);
+// 질문과 서버·도구 이름/설명이 겹치는 도구 하나를 골라요. 필수 인자가 없는 도구만 (인자를 지어내지 않으려고)
+function guessCall(list, q, done) {
+  const qw = new Set(words(q)), ql = String(q).toLowerCase();
+  let best = null;
+  for (const { srv, tools } of list) {
+    const srvHit = ql.includes(String(srv.name).toLowerCase()) || words(srv.name).some((w) => qw.has(w));
+    for (const t of tools) {
+      const id = srv.id + "/" + t.name;
+      if (done.has(id) || t.annotations.destructiveHint === true) continue;
+      const req = (t.inputSchema && t.inputSchema.required) || [];
+      if (req.length) continue;
+      let score = srvHit ? 2 : 0;
+      for (const w of words(t.name.replace(/_/g, " ") + " " + t.description)) if (qw.has(w)) score++;
+      if (/^(list|get|search|find|read|overview|info|describe|show)/i.test(t.name) || /overview|info|list/i.test(t.name)) score += srvHit ? 1 : 0;
+      if (score >= 2 && (!best || score > best.score)) best = { score, tool: id };
+    }
+  }
+  return best ? { tool: best.tool, args: {} } : null;
 }
 
 // 사용자가 켜 둔 서버 목록: 기본(관리자) + 내 커스텀 + DEV에서 가져온 것
@@ -169,6 +200,9 @@ export async function userServers(env, uid) {
   const res = out.slice(0, 6); res.allow = st.allow || []; return res;
 }
 export async function serverTools(servers) {
-  const res = await Promise.all(servers.map(async (srv) => { try { return { srv, tools: await mcpTools(srv) }; } catch { return null; } }));
-  return res.filter((x) => x && x.tools.length);
+  const fail = [];
+  const res = await Promise.all(servers.map(async (srv) => { try { return { srv, tools: await mcpTools(srv) }; } catch (e) { fail.push({ name: srv.name, msg: String(e.message || e).slice(0, 120) }); return null; } }));
+  const ok = res.filter((x) => x && x.tools.length);
+  ok.fail = fail;
+  return ok;
 }

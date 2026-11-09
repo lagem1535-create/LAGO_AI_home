@@ -532,7 +532,7 @@ async function chat(req, env, url, ctx) {
     const ans = String((d && d.answer) || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
     if (!ans) return null;
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
+    return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(mcpList.fail && mcpList.fail.length ? { mcpErr: mcpList.fail } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
   };
   const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
   const noInfo = (a) => /제공된 자료에는 해당 내용이 없습니다/.test(String(a || ""));
@@ -547,7 +547,7 @@ async function chat(req, env, url, ctx) {
   const mcpOpts = { allow: new Set(mcpSrv.allow || []), ok: (Array.isArray(b.mcpOk) ? b.mcpOk : []).slice(0, 3).filter((x) => x && typeof x.tool === "string").map((x) => ({ tool: x.tool.slice(0, 100), args: x.args && typeof x.args === "object" ? x.args : {} })), no: (Array.isArray(b.mcpNo) ? b.mcpNo : []).slice(0, 5).map((x) => String(x).slice(0, 100)) };
   const capTok = maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300);
   const callModel = async () => (mcpList.length
-    ? runWithMcp((s2, u2) => llamaChat(env, lurl, s2, u2, mcpList.length ? Math.max(capTok, 500) : capTok, ac.signal, okModel(b.model)), mcpList, system, user, mcpOpts)
+    ? runWithMcp((s2, u2) => llamaChat(env, lurl, s2, u2, mcpList.length ? Math.max(capTok, 500) : capTok, ac.signal, okModel(b.model)), mcpList, system, user, { ...mcpOpts, q })
     : llamaChat(env, lurl, system, user, capTok, ac.signal, okModel(b.model)));
   if (lurl && task === "ask" && b.stream) {
     // 오래 걸려도 연결이 끊기지 않게, 10초마다 빈 줄을 보내며 기다려요 (앱은 빈 줄을 무시해요)
@@ -587,7 +587,7 @@ async function chat(req, env, url, ctx) {
     let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) });
+    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(mcpList.fail && mcpList.fail.length ? { mcpErr: mcpList.fail } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) });
   } catch (e) {
     return json({ error: lurl ? "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" : "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
   } finally { clearTimeout(t); }
