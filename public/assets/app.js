@@ -152,10 +152,40 @@ ${temps.length?`<div class="sect row" style="gap:6px">${ic("eyeoff",13)} 임시 
 function usagePct(){return Math.min(99,12+S.chats.length*4);}
 function chatMenu(c){return `<div class="cmenu" role="menu"><button class="opt" data-act="cRename" data-id="${c.id}">${ic("pen",15)} 이름 바꾸기</button><button class="opt" data-act="cPin" data-id="${c.id}">${ic("pin",15)} ${c.pin?"고정 해제":"고정하기"}</button>${S.goccia?"":`<button class="opt" data-act="share" data-id="${c.id}">${ic("share",15)} 공유</button>`}<button class="opt danger-t" data-act="cDel" data-id="${c.id}">${ic("trash",15)} 삭제</button></div>`;}
 function delConfirm(c){return `<div class="confirm" style="margin:4px 4px 8px">"${esc(c.title)}"을(를) 지울까요?<div class="row"><button class="btn sm danger" data-act="cDelYes" data-id="${c.id}">지우기</button><button class="btn sm" data-act="cDelNo">취소</button></div></div>`;}
+
+/* ---------- 화면 테마 · 언어 · 검색 ---------- */
+function applyTheme(){const t=S.theme||"light";let dark=t==="dark";try{if(t==="system")dark=matchMedia("(prefers-color-scheme: dark)").matches;}catch(e){}document.documentElement.setAttribute("data-lago",dark?"dark":"light");}
+function setTheme(v){if(!["system","light","dark"].includes(v))return;S.theme=v;store.set("lago_theme",v);applyTheme();render();}
+const EN={"새 대화":"New chat","검색":"Search","프로젝트":"Projects","예약 작업":"Scheduled tasks","서비스 연결":"Connections","최근 대화":"Recent chats","메뉴":"Menu","대화":"Chat","코드":"Code","아직 대화가 없어요.":"No chats yet.","새 대화로 시작해 보세요.":"Start with a new chat.","임시 대화":"Temporary chat","공유":"Share","설정":"Settings","사용량":"Usage","관리자":"Admin","도움 받기":"Get help","플랜 업그레이드":"Upgrade plan","플랜 관리":"Manage plan","앱 및 확장 프로그램 다운로드":"Download apps & extensions","더 알아보기":"Learn more","이용약관":"Terms","로그아웃":"Log out","화면":"Appearance","언어":"Language","시스템":"System","라이트":"Light","다크":"Dark","무엇이든 물어보세요. 찾아 읽고 출처와 함께 답할게요.":"Ask me anything. I'll look it up and answer with sources.","LAGO에게 무엇이든 물어보세요":"Ask LAGO anything","더 물어보세요":"Ask a follow-up","사진·파일 올리기":"Upload photos or files","TOOLS 만들기":"Create TOOLS","모두 보기":"See all","문서 번역":"Translate document","맞춤법 검사":"Spell check","텍스트 추출":"Extract text","문서 요약":"Summarize document","내 TOOLS":"My TOOLS","새 MODE":"New MODE","나만의 MODE":"My MODE","LAGO MODE":"LAGO MODE","전체":"All","DEV 샵":"DEV Shop","새로 올라왔어요":"New","최근 순":"Latest","답하는 방식":"Ways to answer","도구":"Tools","DEV 샵에서 MODE · TOOL 검색":"Search MODEs and TOOLs in the DEV Shop","이메일 인증을 마친 개발자들이 만든 MODE와 TOOL이에요.":"MODEs and TOOLs made by email-verified developers.","일반":"General","계정":"Account","요금제 · 사용량":"Plan & usage","데이터 · 개인정보":"Data & privacy","보호자":"Guardian","약관":"Terms","이름":"Name","바꾸기":"Change","새 대화 기본 모델":"Default model for new chats","생각 강도":"Thinking effort","낮게":"Low","보통":"Medium","깊게":"Deep","화면에 보이는 글자의 언어예요":"Language of the text on screen","라이트 · 다크 · 시스템 설정 따라가기":"Light, dark, or follow the system","저장":"Save","취소":"Cancel","닫기":"Close","복사":"Copy","열기":"Open","삭제":"Delete","지우기":"Clear","보내기":"Send","대화 · MODE · TOOLS 검색":"Search chats, MODEs and TOOLs","검색 결과가 없어요":"No results","최근 대화예요":"Recent chats","대화 내용":"In chats","MODE":"MODE","TOOLS":"TOOLS","새 대화로 가기":"Go to new chat","공유한 것":"Shared","내가 공유한 것":"Shared by me","도움":"Help","열려요":"Opens"};
+function trText(s){const t=s.trim();if(!t)return s;if(EN[t])return s.replace(t,EN[t]);let m=t.match(/^안녕하세요, (.+)님$/);if(m)return s.replace(t,"Hello, "+m[1]);m=t.match(/^(.+) 안녕하세요$/);if(m&&EN[m[1]])return s;return s;}
+function trUI(){if((S.lang||"ko")!=="en")return;const root=document.body;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode(n){const p=n.parentNode&&n.parentNode.nodeName;return p==="SCRIPT"||p==="STYLE"||p==="TEXTAREA"?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT;}});const ns=[];while(w.nextNode())ns.push(w.currentNode);ns.forEach(n=>{const v=trText(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v;});root.querySelectorAll("[placeholder],[aria-label],[title]").forEach(el=>{["placeholder","aria-label","title"].forEach(a=>{const v=el.getAttribute(a);if(v){const t=trText(v);if(t!==v)el.setAttribute(a,t);}});});}
+function setLang(v){if(!["ko","en"].includes(v))return;S.lang=v;store.set("lago_lang",v);document.documentElement.setAttribute("lang",v);render();}
+function srchGo(k){const [t,id]=[k.slice(0,k.indexOf(":")),k.slice(k.indexOf(":")+1)];closeSearch();S.menu=false;S.drawer=false;
+if(t==="chat"){S.cur=id;const c=curChat();S.area=c&&c.area==="code"?"code":"talk";go(c&&c.area==="code"?"code-chat":"chat");}
+else if(t==="agent"){S.curAgent=id;S.cur=null;go("agent");}
+else if(t==="tool"){const d=TOOLS.find(x=>x.id===id);if(d)go(d.route);}
+else if(t==="mytool"){S.curTool=id;S.flyout=false;S.toolIn=null;go("tool-my");}}
+function closeSearch(){const o=document.getElementById("srchov");if(o)o.remove();}
+function srchRun(q){const box=document.getElementById("srchres");if(!box)return;q=(q||"").trim().toLowerCase();
+const chats=S.chats.filter(c=>!c.temp&&!c.kid);const hit=(a)=>a&&String(a).toLowerCase().includes(q);
+const snip=(c)=>{for(const m of c.msgs||[]){const x=m.role==="user"?m.text:(m.plain||"");if(x&&hit(x)){const i=x.toLowerCase().indexOf(q);return (i>30?"…":"")+x.slice(Math.max(0,i-30),i+60).replace(/\s+/g," ");}}return "";};
+let cr=q?chats.filter(c=>hit(c.title)||(c.msgs||[]).some(m=>hit(m.role==="user"?m.text:m.plain))):chats.slice(0,6);cr=cr.slice(0,8);
+const ag=q?allAgents().filter(a=>hit(a.name)||hit(a.desc)).slice(0,5):[];
+const tl=q?TOOLS.filter(t=>hit(t.lab)||hit(t.d)).slice(0,5):[];
+const mt=q?(S.myTools||[]).filter(t=>hit(t.name)||hit(t.desc)).slice(0,5):[];
+const row=(k,i,t,sub)=>`<button type="button" class="srchrow" data-srch="${esc(k)}">${ic(i,16)}<span class="grow"><b>${esc(t)}</b>${sub?`<small>${esc(sub)}</small>`:""}</span></button>`;
+let h="";
+if(cr.length)h+=`<div class="hint">${q?"대화":"최근 대화예요"}</div>`+cr.map(c=>row("chat:"+c.id,"file",c.title||"대화",q?snip(c):"")).join("");
+if(ag.length)h+=`<div class="hint">MODE</div>`+ag.map(a=>row("agent:"+a.id,"bot",a.name,a.desc||"")).join("");
+if(tl.length||mt.length)h+=`<div class="hint">TOOLS</div>`+tl.map(t=>row("tool:"+t.id,t.ic,t.lab,t.d)).join("")+mt.map(t=>row("mytool:"+t.id,"bot",t.name,t.desc||"")).join("");
+box.innerHTML=h||`<p class="muted" style="margin:14px 8px">${q?"검색 결과가 없어요":"아직 대화가 없어요."}</p>`;trUI();}
+function openSearch(){if(!S.user||document.getElementById("srchov"))return;const o=document.createElement("div");o.id="srchov";o.className="tempask";o.innerHTML=`<div class="card srchbox" role="dialog" aria-label="검색"><div class="srchin">${ic("search",18)}<input id="srchq" type="search" placeholder="대화 · MODE · TOOLS 검색" autocomplete="off" aria-label="검색어"><button type="button" class="iconbtn" data-srchx="1" aria-label="닫기">${ic("x",16)}</button></div><div id="srchres" class="srchres"></div></div>`;document.body.appendChild(o);const q=o.querySelector("#srchq");q.addEventListener("input",()=>srchRun(q.value));o.addEventListener("click",e=>{const b=e.target.closest("[data-srch]");if(b){e.stopPropagation();srchGo(b.dataset.srch);return;}if(e.target===o||e.target.closest("[data-srchx]")){e.stopPropagation();closeSearch();}});o.addEventListener("keydown",e=>{if(e.key==="Escape"){e.stopPropagation();closeSearch();}if(e.key==="Enter"){const f=o.querySelector("[data-srch]");if(f){e.preventDefault();srchGo(f.dataset.srch);}}});srchRun("");q.focus();trUI();}
+function themeLang(){const th=S.theme||"light",lg=S.lang||"ko";const sg=(act,cur,o)=>`<div class="seg mini" role="group">${o.map(([v,l])=>`<button type="button" aria-pressed="${cur===v}" data-act="${act}" data-v="${v}">${l}</button>`).join("")}</div>`;
+return `<div class="acctrow"><span class="grow">${ic("sliders",17)} 화면</span>${sg("setTheme",th,[["system","시스템"],["light","라이트"],["dark","다크"]])}</div><div class="acctrow"><span class="grow">${ic("globe",17)} 언어</span>${sg("setLang",lg,[["ko","한국어"],["en","English"]])}</div>`;}
 function acctMenu(){const kid=S.goccia;const plan=S.user.plan||"Free";const it=(k,t,attr,right="")=>`<button class="opt" ${attr}>${ic(k,17)}<span class="grow">${t}</span>${right}</button>`;
 return `<div class="acctwrap" data-act="acct"></div><div class="acct" role="menu" aria-label="계정 메뉴"><div class="acchead">${esc(kid?"지우 · LAGO Goccia":S.user.email)}</div>
 ${kid?it("swap",esc(S.user.name)+" 계정으로 돌아가기",'data-act="asMe"')+it("file","이용약관",'data-go="terms"'):
-it("sliders","설정",'data-go="prefs"','<span class="kb">Ctrl+,</span>')+it("share","공유",'data-go="shared"')+it("check","LAGO DEV",'data-go="dev"')+it("gauge","사용량",'data-go="usage"')+(isAdmin()?it("shield","관리자",'data-go="admin"'):"")+it("globe","언어",'data-act="lang"','<span class="kb">한국어</span>')+it("help","도움 받기",'data-act="help"')+"<hr>"+
+it("sliders","설정",'data-go="prefs"','<span class="kb">Ctrl+,</span>')+it("share","공유",'data-go="shared"')+it("check","LAGO DEV",'data-go="dev"')+it("gauge","사용량",'data-go="usage"')+(isAdmin()?it("shield","관리자",'data-go="admin"'):"")+themeLang()+it("help","도움 받기",'data-act="help"')+"<hr>"+
 (plan==="Max"?it("crown","플랜 관리",'data-go="plans"','<span class="maxtag">MAX</span>'):it("upc","플랜 업그레이드",'data-go="plans"'))+it("download","앱 및 확장 프로그램 다운로드",'data-act="dl"')+it("info","더 알아보기",'data-act="more"',ic("right",14))+"<hr>"+
 (S.guardian?it("shield","보호자 화면",'data-go="guardian"',pendingReq()?'<span class="maxtag" style="background:#FDE8E4;color:#C0392B;border-color:transparent">요청 '+pendingReq()+'</span>':""):"")+it("file","이용약관",'data-go="terms"')}
 <hr>${it("logout","로그아웃",'data-act="logout"')}</div>`;}
@@ -494,7 +524,7 @@ let body="";
 if(t==="general")body=row("이름",esc(S.user.name),`<button class="btn sm" data-act="rename">바꾸기</button>`)+(S.renaming?`<form id="renameForm" class="row" style="padding:0 0 12px"><input id="rn" value="${esc(S.user.name)}" aria-label="새 이름"><button class="btn sm pri">저장</button></form>`:"")
 +row("새 대화 기본 모델","",`<select id="sMode" aria-label="기본 모델">${TALK_MODES.map(m=>`<option value="${m.id}" ${S.mode===m.id?"selected":""}>${m.lab} · ${m.id}</option>`).join("")}</select>`)
 +row("생각 강도","THINK · CODE에서 얼마나 깊게 생각할지",`<select id="sThink" aria-label="생각 강도">${["낮게","보통","깊게"].map((x,i)=>`<option value="${i}" ${S.think===i?"selected":""}>${x}</option>`).join("")}</select>`)
-+row("언어","","<span class=\"muted\">한국어</span>")+row("서버 연결",S.api?"위키백과 · 공공데이터 "+(S.api.publicData?"연결됨":"키 없음")+" · Firebase "+(S.fb?"연결됨 · 로그인 "+esc(S.user.email):"설정 없음"):"미리보기 (예시 답변)","");
++row("화면","라이트 · 다크 · 시스템 설정 따라가기",`<select id="sTheme" aria-label="화면 테마">${[["system","시스템"],["light","라이트"],["dark","다크"]].map(([v,l])=>`<option value="${v}" ${(S.theme||"light")===v?"selected":""}>${l}</option>`).join("")}</select>`)+row("언어","화면에 보이는 글자의 언어예요",`<select id="sLang" aria-label="언어"><option value="ko" ${(S.lang||"ko")==="ko"?"selected":""}>한국어</option><option value="en" ${S.lang==="en"?"selected":""}>English</option></select>`)+row("서버 연결",S.api?"위키백과 · 공공데이터 "+(S.api.publicData?"연결됨":"키 없음")+" · Firebase "+(S.fb?"연결됨 · 로그인 "+esc(S.user.email):"설정 없음"):"미리보기 (예시 답변)","");
 if(t==="account")body=row("이메일",esc(S.user.email),'<span style="color:var(--g);font-size:12.5px;font-weight:600">인증됨</span>')+row("로그아웃","",`<button class="btn sm" data-act="logout">${ic("logout",14)} 로그아웃</button>`)+row("탈퇴","계정과 대화가 모두 지워져요",`<button class="btn sm danger" data-act="ask-leave">탈퇴하기</button>`)+(conf==="leave"?`<div class="confirm">탈퇴하면 계정과 대화가 모두 지워져요. 유료 요금제는 먼저 해지돼요.<div class="row"><button class="btn sm danger" data-act="leave">탈퇴하기</button><button class="btn sm" data-act="cancel">취소</button></div></div>`:"");
 if(t==="plan")body=row(esc(S.user.plan||"Free")+" 요금제","",`<button class="btn sm" data-go="plans">요금제 바꾸기</button>`)+row("오늘 사용량",usagePct()+"% · 매일 0시(한국 시간)에 초기화",`<button class="btn sm pri" data-go="usage">자세히 보기</button>`);
 if(t==="data")body=row("LAGO 개선에 내 대화 사용","끄면 그 뒤 대화는 학습에 들어가지 않아요.",sw("learn",S.learn))+row("이미지도 사용","첨부한 이미지와 화면 캡처",sw("learnImg",S.learnImg))+row("내 데이터 전부 지우기","대화 · 프로젝트 · 이미지를 지워요. 되돌릴 수 없어요.",`<button class="btn sm danger" data-act="ask-wipe">지우기</button>`)+(conf==="wipe"?`<div class="confirm">정말 모두 지울까요?<div class="row"><button class="btn sm danger" data-act="wipe">${ic("trash",14)} 모두 지우기</button><button class="btn sm" data-act="cancel">취소</button></div></div>`:"");
@@ -793,7 +823,7 @@ case"verified":{const u=store.get("lago_users",{})[S.pendingVerify];if(u){S.user
 case"resend":toast("인증 메일을 다시 보냈어요 (1분에 한 번)");break;
 case"kidGuardian":go("guardian");break;
 case"new":S.cur=null;S.preview=false;S.drawer=false;go(S.area==="code"?"code":"home");break;
-case"search":toast("검색은 실제 서비스에서 대화 제목과 내용을 찾아 줘요");break;
+case"search":S.drawer=false;openSearch();break;
 case"term":toast(S.goccia?"아이 계정에서는 터미널 모드를 쓸 수 없어요":"터미널 모드는 LAGO Desktop에서 쓸 수 있어요");break;
 case"attach":toast("파일 첨부는 실제 서비스에서 연결돼요");break;
 case"plus":S.plus=!S.plus;S.menu=false;S.conn=false;render();break;
@@ -872,7 +902,9 @@ case"taskRun":{const t=S.tasks.find(x=>x.id===d.id);if(!t)break;t.last=Date.now(
 case"conn":S.conn=!S.conn;S.menu=false;render();break;
 case"flyout":S.flyout=!S.flyout;S.acct=false;render();break;
 case"mcpDel":{const a=cust();a.splice(+d.i,1);S.customMcp=a;save();render();break;}
-case"lang":toast("지금은 한국어만 지원해요");break;
+case"setTheme":setTheme(d.v);break;
+case"setLang":setLang(d.v);break;
+case"lang":S.acct=true;render();break;
 case"help":toast("도움말 센터는 공개 때 열려요");break;
 case"dl":toast("LAGO Desktop과 브라우저 확장은 Beta2(12/25)부터 받을 수 있어요");break;
 case"more":toast("LAGO 소개 · 블로그는 공개 때 열려요");break;
@@ -908,6 +940,7 @@ case"revokeYes":S.confirm=null;toast("동의를 철회했어요. 아이 계정�
 document.addEventListener("input",e=>{const t=e.target;if(t.id==="audEm"&&S.aud)S.aud.em=t.value;else if(S.htmlDraft){if(t.id==="hT")S.htmlDraft.title=t.value;else if(t.id==="hC")S.htmlDraft.code=t.value;}});
 document.addEventListener("input",e=>{const t=e.target;if(t&&t.id==="shopQ"){S.devQs=t.value;const el=document.getElementById("shopList");if(el)el.innerHTML=shopBody();}});
 document.addEventListener("change",e=>{const t=e.target;
+if(t.id==="sTheme"){setTheme(t.value);return;}if(t.id==="sLang"){setLang(t.value);return;}
 if(t.id==="dvC"){const f=t.files&&t.files[0];if(!f)return;const keep=()=>{S.devQ={...(S.devQ||{kind:"mode"}),name:($("#dvN")||{}).value||"",ins:($("#dvI")||{}).value||"",desc:($("#dvD")||{}).value||"",model:($("#dvM")||{}).value||""};};keep();coverFrom(f).then(u=>{S.devQ.cover=u;S.devMsg="";render();}).catch(()=>{S.devMsg="이미지를 읽지 못했어요. 다른 파일로 해 보세요.";render();});return;}
 if(t.id==="audInv"&&S.aud){S.aud.inv=t.checked;return;}
 if(t.id==="hF"&&S.htmlDraft){const f=t.files&&t.files[0];if(!f)return;if(f.size>200000){S.htmlDraft.err="200KB보다 큰 파일이에요.";render();return;}f.text().then(x=>{S.htmlDraft.code=x;S.htmlDraft.err="";if(!S.htmlDraft.title)S.htmlDraft.title=f.name.replace(/\.[^.]+$/,"").slice(0,40);render();});return;}
@@ -918,7 +951,8 @@ if(t.id==="sMode"){S.mode=t.value;save();toast("기본 모드를 바꿨어요");
 if(t.id==="sThink"){S.think=+t.value;save();}
 if(t.id==="sWeb"){S.web=+t.value;save();}
 if(t.id==="gLimit"){S.limit=+t.value;render();toast("하루 사용 시간을 "+t.value+"시간으로 바꿨어요");}});
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&(S.menu||S.drawer||S.tempAsk||S.acct)){S.menu=false;S.drawer=false;S.tempAsk=false;S.acct=false;render();}
+document.addEventListener("keydown",e=>{if(e.key==="/"&&S.user&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||"")&&!(e.target&&e.target.isContentEditable)){e.preventDefault();openSearch();return;}
+if(e.key==="Escape"&&(S.menu||S.drawer||S.tempAsk||S.acct)){S.menu=false;S.drawer=false;S.tempAsk=false;S.acct=false;render();}
 if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="b"&&S.user){e.preventDefault();S.sideOff=!S.sideOff;store.set("lago_sideoff",S.sideOff);render();return;}
 if((e.ctrlKey||e.metaKey)&&e.key===","&&S.user&&!S.goccia){e.preventDefault();go("prefs");return;}
 if(e.key==="Escape"&&(S.cmenu||S.share||S.renameChat||S.delChat)){S.cmenu=null;S.share=null;S.renameChat=null;S.delChat=null;S.flyout=false;render();return;}
@@ -997,7 +1031,8 @@ function frame(now){if(!document.body.contains(canvas)){cancelAnimationFrame(raf
 const api={play(){size();cancelAnimationFrame(raf);t0=performance.now();raf=requestAnimationFrame(frame);},stop(){cancelAnimationFrame(raf);}};addEventListener("resize",size);brandStage=api;api.play();}
 
 /* ---------- boot ---------- */
-S.sideOff=store.get("lago_sideoff",false)===true;{const _r=render;render=function(){_r();fixPops();};}
+S.theme=store.get("lago_theme","light");S.lang=store.get("lago_lang","ko");applyTheme();document.documentElement.setAttribute("lang",S.lang);try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(S.theme==="system")applyTheme();});}catch(e){}
+S.sideOff=store.get("lago_sideoff",false)===true;{const _r=render;render=function(){_r();fixPops();trUI();};}
 /* 서버가 정한 정지/요금제/한도를 불러와요. 5분마다, 그리고 탭으로 돌아올 때 다시 확인해요. */
 async function meCheck(){if(!S.fb||!S.user||!S.user.uid||!S.api)return;
 try{const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/me",{headers:{authorization:"Bearer "+tk},cache:"no-store"});if(!r.ok)return;const m=await r.json();

@@ -562,3 +562,18 @@ h1{font-size:30px;line-height:1.2}
 .foldb>.card,.foldb>div>.card{box-shadow:none;background:#F8FAFC}
 @media (prefers-reduced-motion:reduce){.foldc{transition:none}}
 .foldh[aria-expanded],.foldh[aria-expanded]:hover,.foldh[aria-expanded]:active{background:none;color:inherit;border:0;box-shadow:none}.foldh[aria-expanded]:hover{background:#F7F9FC}.foldh:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}.foldh .foldc{background:none;color:var(--ink2)}
+
+:root[data-lago=dark]{filter:invert(.92) hue-rotate(180deg);background:#fff}
+:root[data-lago=dark] img,:root[data-lago=dark] video,:root[data-lago=dark] iframe,:root[data-lago=dark] canvas{filter:invert(1) hue-rotate(180deg)}
+.acctrow{display:flex;align-items:center;gap:10px;padding:6px 10px;font-size:14px}.acctrow .grow{display:flex;align-items:center;gap:10px}
+.seg.mini{display:inline-flex;padding:2px;gap:2px}.seg.mini button{padding:4px 9px;font-size:12px;min-height:0}
+.srchbox{width:min(560px,100%);padding:0;overflow:hidden;align-self:start;margin-top:10vh;display:grid}
+.srchin{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);color:var(--mut)}
+.srchin input{border:0;background:none;flex:1;min-width:0;font-size:16px;padding:4px 0;box-shadow:none}.srchin input:focus-visible{outline:none}
+.srchres{max-height:min(60vh,440px);overflow-y:auto;padding:6px}
+.srchres .hint{padding:8px 10px 4px;font-size:11.5px}
+.srchrow{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:9px 10px;cursor:pointer;color:inherit;font:inherit}
+.srchrow:hover,.srchrow:focus-visible{background:#F1F5FA;outline:none}
+.srchrow .grow{min-width:0}.srchrow b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.srchrow small{display:block;color:var(--mut);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srchin input::-webkit-search-cancel-button,.srchin input::-webkit-search-decoration{display:none;-webkit-appearance:none}
+.acctrow{flex-wrap:wrap;row-gap:6px}.acctrow .grow{flex:1 1 90px}.acctrow .seg.mini{margin-left:auto}
