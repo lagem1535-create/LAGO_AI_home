@@ -523,6 +523,7 @@ async function chat(req, env, url, ctx) {
   };
   const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
   const noInfo = (a) => /제공된 자료에는 해당 내용이 없습니다/.test(String(a || ""));
+  if (b.lang === "en" && task !== "translate") system += "\n\nIMPORTANT: Write the whole answer in English, even if the question or the sources are in Korean. Keep source numbers like [1] as they are.";
   // 뉴스 질문은 모델을 거치지 않고 (태블릿이 기사를 읽는 데 몇 분 걸려요) 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
   if (newsMode && task === "ask") { const pl = payload({ answer: newsAnswer() }); if (pl) return json({ ...pl, direct: true }); }
   if (lurl && task === "ask" && b.stream) {

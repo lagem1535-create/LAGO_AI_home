@@ -5,7 +5,7 @@ import re, sys, pathlib
 root = pathlib.Path(__file__).resolve().parent.parent / "public"
 html = (root / "index.html").read_text()
 css = (root / "assets/app.css").read_text()
-js = (root / "assets/admin.js").read_text() + "\n" + (root / "assets/app.js").read_text()
+js = (root / "assets/en.js").read_text() + "\n" + (root / "assets/admin.js").read_text() + "\n" + (root / "assets/app.js").read_text()
 html = html.replace('<meta name="lago-router" content="path">\n', "")
 html = html.replace('<link rel="stylesheet" href="/assets/app.css">', "<style>\n" + css + "</style>")
 html = re.sub(r'<script defer src="/assets/[a-z]+\.js"></script>\n?', "", html)
