@@ -524,6 +524,7 @@ async function chat(req, env, url, ctx) {
   const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
   const noInfo = (a) => /제공된 자료에는 해당 내용이 없습니다/.test(String(a || ""));
   if (b.lang === "en" && task !== "translate") system += "\n\nIMPORTANT: Write the whole answer in English, even if the question or the sources are in Korean. Keep source numbers like [1] as they are.";
+  if (b.lang === "en" && task !== "translate") { user += "\n\n(Answer in English only.)"; if (maxTok < 600) maxTok = 600; }
   // 뉴스 질문은 모델을 거치지 않고 (태블릿이 기사를 읽는 데 몇 분 걸려요) 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
   if (newsMode && task === "ask") { const pl = payload({ answer: newsAnswer() }); if (pl) return json({ ...pl, direct: true }); }
   if (lurl && task === "ask" && b.stream) {
@@ -535,7 +536,7 @@ async function chat(req, env, url, ctx) {
       const ka = setInterval(() => w.write(enc.encode("\n")).catch(() => {}), 10000);
       try {
         send({ t: "refs", refs: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과") })) });
-        const lr = await llamaChat(env, lurl, system, user, maxTok < 300 ? maxTok : 300, ac.signal, okModel(b.model));
+        const lr = await llamaChat(env, lurl, system, user, maxTok < (b.lang === "en" ? 600 : 300) ? maxTok : (b.lang === "en" ? 600 : 300), ac.signal, okModel(b.model));
         if (lr.status) send({ t: "error", error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")" });
         else { const pl = payload(newsMode && noInfo(lr.answer) ? { answer: newsAnswer() } : lr); send(pl ? { t: "done", ...pl, ...(newsMode && noInfo(lr.answer) ? { direct: true } : {}) } : { t: "error", error: "빈 답이 왔어요" }); }
       } catch { send({ t: "error", error: "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" }); }
@@ -547,7 +548,7 @@ async function chat(req, env, url, ctx) {
   try {
     let d;
     if (lurl) {
-      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? (maxTok < 300 ? maxTok : 300) : maxTok, ac.signal, okModel(b.model));
+      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? (maxTok < (b.lang === "en" ? 600 : 300) ? maxTok : (b.lang === "en" ? 600 : 300)) : maxTok, ac.signal, okModel(b.model));
       if (lr.status) return json({ error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")", modelDown: true }, 502);
       d = lr;
     } else {
