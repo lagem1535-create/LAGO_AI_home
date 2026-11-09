@@ -50,7 +50,8 @@ async function post(srv, body, sid, ms = 15000) {
   if (sid) h["mcp-session-id"] = sid;
   const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms);
   try {
-    const r = await fetch(srv.url, { method: "POST", headers: h, body: JSON.stringify(body), signal: ac.signal, redirect: "error" });
+    const r = await fetch(srv.url, { method: "POST", headers: h, body: JSON.stringify(body), signal: ac.signal, redirect: "manual" });
+    if (r.status >= 300 && r.status < 400) throw new Error("서버가 다른 주소로 넘겨요(리다이렉트). 최종 주소를 직접 넣어 주세요");
     const txt = (await r.text()).slice(0, 400000);
     return { status: r.status, sid: r.headers.get("mcp-session-id") || sid || "", msgs: parseBody(txt, r.headers.get("content-type")), raw: txt };
   } finally { clearTimeout(t); }
