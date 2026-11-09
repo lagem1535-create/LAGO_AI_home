@@ -7,6 +7,8 @@
 //   MAIL_FROM        — (선택) 보내는 사람. 기본값 "LAGO <onboarding@resend.dev>" (이 주소는 Resend 가입 이메일에만 보낼 수 있어요)
 // 키는 브라우저로 내려보내지 않아요. 공공데이터 호출은 이 Worker가 대신 해요.
 
+import { okMcpUrl, mcpTools, mcpCall, runWithMcp, userServers, serverTools } from "./mcp.js";
+
 const UA = "LAGO-AI/0.1 (https://lago-ai-home.lagem1535.workers.dev)";
 
 const json = (data, status = 200, extra = {}) =>
@@ -196,7 +198,7 @@ async function shareTools(req, env, url, ctx, p) {
   if (m && req.method === "GET") {
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + m[1]);
     if (!o) return json({ error: "배포가 끝났거나 없는 도구예요" }, 404);
-    const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ id: m[1], kind: d.kind || "tool", name: d.name, desc: d.desc, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", dev: await isDev(env, d.owner), runs: d.runs || 0 });
+    const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae; return json({ id: m[1], kind: d.kind || "tool", ...(d.kind === "mcp" ? { mcpTools: (d.mcpTools || {}).names || [], mcpN: (d.mcpTools || {}).n || 0 } : {}), name: d.name, desc: d.desc, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", dev: await isDev(env, d.owner), runs: d.runs || 0 });
   }
   if (!post) return json({ error: "POST만 돼요" }, 405);
   if (p === "/api/share") {
@@ -232,9 +234,17 @@ async function shareTools(req, env, url, ctx, p) {
   if (p === "/api/tools/publish") {
     const g = await pubGate(req, env, url, ctx); if (g.err) return g.err;
     let b = {}; try { b = await req.json(); } catch {}
-    const name = cap(b.name, 30).trim(), ins = cap(b.ins, 1500).trim();
+    const isMcp = b.kind === "mcp";
+    const name = cap(b.name, 30).trim(), ins = isMcp ? "MCP" : cap(b.ins, 1500).trim();
     if (!name || !ins) return json({ error: "이름과 지시문이 필요해요" }, 400);
-    const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now(), kind: b.kind === "mode" ? "mode" : "tool", starters: (Array.isArray(b.starters) ? b.starters : []).slice(0, 3).map((x) => cap(x, 80)).filter(Boolean), model: okModel(b.model), emails: normEmails(b.emails), viaDev: !!b.viaDev && await isDev(env, g.u.localId), cover: /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(b.cover || "") && b.cover.length < 120000 ? b.cover : "" };
+    let mcpInfo = null;
+    if (isMcp) {
+      if (!(await isDev(env, g.u.localId))) return json({ error: "MCP는 LAGO DEV만 올릴 수 있어요" }, 403);
+      if (!okMcpUrl(b.url)) return json({ error: "https:// 로 시작하는 공개 MCP 서버 주소를 넣어 주세요" }, 400);
+      try { const tl = await mcpTools({ url: b.url, token: cap(b.token, 400) }, true); if (!tl.length) return json({ error: "서버에 연결됐지만 쓸 수 있는 도구가 없어요" }, 400); mcpInfo = { n: tl.length, names: tl.slice(0, 12).map((t) => t.name) }; } catch (e) { return json({ error: "MCP 서버에 연결하지 못했어요: " + String(e.message || e).slice(0, 120) }, 400); }
+    }
+    const d = { name, desc: cap(b.desc, 120), ins, input: ["text", "file", "both"].includes(b.input) ? b.input : "text", opts: (Array.isArray(b.opts) ? b.opts : []).slice(0, 8).map((x) => cap(x, 20)).filter(Boolean), owner: g.u.localId, ownerName: b.showName ? cap(b.ownerName, 30) : "", at: Date.now(), kind: b.kind === "mode" ? "mode" : b.kind === "mcp" ? "mcp" : "tool", starters: (Array.isArray(b.starters) ? b.starters : []).slice(0, 3).map((x) => cap(x, 80)).filter(Boolean), model: okModel(b.model), emails: normEmails(b.emails), viaDev: !!b.viaDev && await isDev(env, g.u.localId), cover: /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(b.cover || "") && b.cover.length < 120000 ? b.cover : "" };
+    if (mcpInfo) { d.mcpUrl = b.url; d.mcpToken = cap(b.token, 400); d.mcpTools = mcpInfo; }
     let id = /^[a-z0-9]{6,16}$/.test(b.id || "") ? b.id : "";
     if (id) {
       const old = await env.ADMIN_KV.get("tool:" + id);
@@ -296,13 +306,14 @@ async function shareTools(req, env, url, ctx, p) {
     if (!o) return json({ error: "공개가 끝났거나 없는 항목이에요" }, 404);
     const d = JSON.parse(o); const ae = await audCheck(req, env, d); if (ae) return ae;
     ctx.waitUntil(env.ADMIN_KV.put("tool:" + cap(b.id, 16), JSON.stringify({ ...d, imports: (d.imports || 0) + 1 })));
-    return json({ ok: true, kind: d.kind || "tool", name: d.name, desc: d.desc, ins: d.ins, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", dev: await isDev(env, d.owner) });
+    return json({ ok: true, kind: d.kind || "tool", ...(d.kind === "mcp" ? { mcpTools: (d.mcpTools || {}).names || [] } : {}), name: d.name, desc: d.desc, ins: d.ins, input: d.input, opts: d.opts, starters: d.starters || [], model: d.model || "", owner: d.ownerName || "", dev: await isDev(env, d.owner) });
   }
   if (p === "/api/tools/run") {
     let b = {}; try { b = await req.clone().json(); } catch {}
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + cap(b.id, 16));
     if (!o) return json({ error: "배포가 끝났거나 없는 도구예요" }, 404);
     const d = JSON.parse(o);
+    if (d.kind === "mcp") return json({ error: "MCP는 서비스 연결에서 켜서 써요" }, 400);
     const ae = await audCheck(req, env, d); if (ae) return ae;
     const ins = d.ins + (b.opt && d.opts.includes(b.opt) ? "\n선택한 옵션: " + b.opt : "");
     const r2 = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify({ task: "agent", q: cap(b.text, 500), ctx: cap(b.text, 3000), agent: { name: d.name, instructions: ins }, tool: (d.kind || "tool") === "tool", model: d.model || undefined }) });
@@ -519,7 +530,7 @@ async function chat(req, env, url, ctx) {
     const ans = String((d && d.answer) || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
     if (!ans) return null;
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
+    return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
   };
   const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
   const noInfo = (a) => /제공된 자료에는 해당 내용이 없습니다/.test(String(a || ""));
@@ -529,6 +540,11 @@ async function chat(req, env, url, ctx) {
   if (b.lang === "en" && task !== "translate") { user += "\n\n(Answer in English only.)"; if (maxTok < 600) maxTok = 600; }
   // 뉴스 질문은 모델을 거치지 않고 (태블릿이 기사를 읽는 데 몇 분 걸려요) 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
   if (newsMode && task === "ask") { const pl = payload({ answer: newsAnswer() }); if (pl) return json({ ...pl, direct: true }); }
+  const mcpList = lurl && task === "ask" && !newsMode ? await serverTools(await userServers(env, u.localId)) : [];
+  const capTok = maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300);
+  const callModel = async () => (mcpList.length
+    ? runWithMcp((s2, u2) => llamaChat(env, lurl, s2, u2, mcpList.length ? Math.max(capTok, 500) : capTok, ac.signal, okModel(b.model)), mcpList, system, user)
+    : llamaChat(env, lurl, system, user, capTok, ac.signal, okModel(b.model)));
   if (lurl && task === "ask" && b.stream) {
     // 오래 걸려도 연결이 끊기지 않게, 10초마다 빈 줄을 보내며 기다려요 (앱은 빈 줄을 무시해요)
     const { readable, writable } = new TransformStream();
@@ -538,7 +554,7 @@ async function chat(req, env, url, ctx) {
       const ka = setInterval(() => w.write(enc.encode("\n")).catch(() => {}), 10000);
       try {
         send({ t: "refs", refs: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과") })) });
-        const lr = await llamaChat(env, lurl, system, user, maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300), ac.signal, okModel(b.model));
+        const lr = await callModel();
         if (lr.status) send({ t: "error", error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")" });
         else { const pl = payload(newsMode && noInfo(lr.answer) ? { answer: newsAnswer() } : lr); send(pl ? { t: "done", ...pl, ...(newsMode && noInfo(lr.answer) ? { direct: true } : {}) } : { t: "error", error: "빈 답이 왔어요" }); }
       } catch { send({ t: "error", error: "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" }); }
@@ -550,7 +566,7 @@ async function chat(req, env, url, ctx) {
   try {
     let d;
     if (lurl) {
-      const lr = await llamaChat(env, lurl, system, user, task === "ask" || task === "agent" ? (maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300)) : maxTok, ac.signal, okModel(b.model));
+      const lr = task === "ask" ? await callModel() : await llamaChat(env, lurl, system, user, task === "agent" ? capTok : maxTok, ac.signal, okModel(b.model));
       if (lr.status) return json({ error: lr.status === 401 || lr.status === 403 ? "모델 서버 키(LLAMA_API_KEY)가 맞지 않아요" : "모델이 응답하지 못했어요 (" + lr.status + ")", modelDown: true }, 502);
       d = lr;
     } else {
@@ -565,7 +581,7 @@ async function chat(req, env, url, ctx) {
     let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) });
+    return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) });
   } catch (e) {
     return json({ error: lurl ? "모델 서버에 연결하지 못했어요. 임시 주소가 바뀌었는지 관리자 화면에서 확인해 주세요" : "모델 서버에 연결하지 못했어요", modelDown: true }, 502);
   } finally { clearTimeout(t); }
@@ -858,6 +874,55 @@ async function tokenUser(req, env) {
   return (await lk.json())?.users?.[0] || null;
 }
 
+// ---------- MCP 연결 API (로그인한 사용자) ----------
+async function mcpApi(req, env, url) {
+  const origin = req.headers.get("origin");
+  if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);
+  if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+  const u = await tokenUser(req, env);
+  if (!u) return json({ error: "로그인이 필요해요" }, 401);
+  const kget = async (k, d) => { try { return JSON.parse((await env.ADMIN_KV.get(k)) || "null") ?? d; } catch { return d; } };
+  const stKey = "umcp:" + u.localId, st = await kget(stKey, {}); st.off = st.off || []; st.custom = st.custom || []; st.dev = st.dev || [];
+  const save = () => env.ADMIN_KV.put(stKey, JSON.stringify(st));
+  const p = url.pathname;
+  let b = {}; if (req.method === "POST") { try { b = await req.json(); } catch {} }
+  if (p === "/api/mcp/list" && req.method === "GET") {
+    const defs = (await kget("mcp:default", [])).filter((d) => d.enabled !== false);
+    const dev = []; for (const id of st.dev) { const d = await kget("tool:" + id, null); if (d && d.kind === "mcp" && !d.hidden) dev.push({ id, name: d.name, desc: d.desc || "", tools: (d.mcpTools || {}).n || 0 }); }
+    return json({ defaults: defs.map((d) => ({ id: d.id, name: d.name, desc: d.desc || "", on: !st.off.includes(d.id) })), custom: st.custom.map((c) => ({ id: c.id, name: c.name, url: c.url, on: c.on !== false, auth: !!c.token })), dev });
+  }
+  if (req.method !== "POST") return json({ error: "POST만 돼요" }, 405);
+  if (p === "/api/mcp/toggle") {
+    const id = cap(b.id, 20), on = !!b.on;
+    if (b.kind === "custom") { const c = st.custom.find((x) => x.id === id); if (!c) return json({ error: "없는 커넥터예요" }, 404); c.on = on; }
+    else { st.off = st.off.filter((x) => x !== id); if (!on) st.off.push(id); }
+    await save(); return json({ ok: true });
+  }
+  if (p === "/api/mcp/add") {
+    if (st.custom.length >= 5) return json({ error: "내 커넥터는 5개까지예요" }, 400);
+    if (!okMcpUrl(b.url)) return json({ error: "https:// 로 시작하는 공개 서버 주소를 넣어 주세요 (포트·IP 주소·내부 주소는 안 돼요)" }, 400);
+    if (st.custom.some((c) => c.url === b.url)) return json({ error: "이미 추가한 주소예요" }, 400);
+    let tl; try { tl = await mcpTools({ url: b.url, token: cap(b.token, 400) }, true); } catch (e) { return json({ error: "연결하지 못했어요: " + String(e.message || e).slice(0, 140) }, 400); }
+    if (!tl.length) return json({ error: "연결됐지만 쓸 수 있는 도구가 없어요" }, 400);
+    const c = { id: "c" + rid().slice(0, 6), name: cap(b.name, 30).trim() || new URL(b.url).hostname, url: b.url, token: cap(b.token, 400), on: true };
+    st.custom.push(c); await save(); return json({ ok: true, id: c.id, tools: tl.map((t) => t.name).slice(0, 12), n: tl.length });
+  }
+  if (p === "/api/mcp/addDev") {
+    const id = cap(b.id, 16); const d = await kget("tool:" + id, null);
+    if (!d || d.kind !== "mcp" || d.hidden) return json({ error: "없는 MCP예요" }, 404);
+    const ae = await audCheck(req, env, d); if (ae) return ae;
+    if (st.dev.length >= 5) return json({ error: "DEV에서 가져온 MCP는 5개까지예요" }, 400);
+    if (!st.dev.includes(id)) st.dev.push(id);
+    await save(); return json({ ok: true });
+  }
+  if (p === "/api/mcp/remove") {
+    const id = cap(b.id, 20);
+    if (b.kind === "dev") st.dev = st.dev.filter((x) => x !== id); else st.custom = st.custom.filter((x) => x.id !== id);
+    await save(); return json({ ok: true });
+  }
+  return json({ error: "없는 경로예요" }, 404);
+}
+
 // ---------- 예약 작업 (모델 없이: 위키백과·공공데이터로 찾은 답을 메일로) ----------
 // 앱이 /api/tasks/sync 로 작업 목록을 보내면 Firestore tasks/{uid} 에 저장하고, 5분마다 도는 크론이 시간이 된 작업을 실행해요.
 // 결과는 로그인한 본인(이메일 인증된) 주소로만 보내요.
@@ -1063,6 +1128,29 @@ async function adminApi(req, env, ctx, url, raw) {
     if (!saOf(env)) return json({ error: "FIREBASE_SERVICE_ACCOUNT가 없어요. 관리자 화면 → 키와 설정에서 넣어 주세요.", needSa: true }, 503);
     try { await sweep(env); return json({ users: await listUsers(env) }); } catch (e) { return json({ error: String(e.message || e) }, 502); }
   }
+  if (p === "/api/admin/mcp") {
+    if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+    let defs = []; try { defs = JSON.parse((await env.ADMIN_KV.get("mcp:default")) || "[]"); } catch {}
+    const view = () => defs.map((d) => ({ id: d.id, name: d.name, desc: d.desc || "", url: d.url, enabled: d.enabled !== false, auth: !!d.token }));
+    if (req.method === "GET") return json({ items: view() });
+    let b = {}; try { b = await req.json(); } catch {}
+    if (b.action === "test") {
+      const srv = b.id ? defs.find((d) => d.id === b.id) : { url: String(b.url || ""), token: String(b.token || "") };
+      if (!srv || !okMcpUrl(srv.url)) return json({ error: "주소가 올바르지 않아요 (https://, 포트·IP 불가)" }, 400);
+      try { const tl = await mcpTools(srv, true); return json({ ok: true, tools: tl.map((t) => ({ name: t.name, desc: t.description })) }); } catch (e) { return json({ error: String(e.message || e).slice(0, 160) }, 400); }
+    }
+    if (b.action === "delete") { defs = defs.filter((d) => d.id !== b.id); await env.ADMIN_KV.put("mcp:default", JSON.stringify(defs)); return json({ ok: true, items: view() }); }
+    if (b.action === "save") {
+      if (!okMcpUrl(b.url)) return json({ error: "https:// 로 시작하는 공개 서버 주소를 넣어 주세요" }, 400);
+      const name = cap(b.name, 30).trim(); if (!name) return json({ error: "이름을 적어 주세요" }, 400);
+      let d = b.id && defs.find((x) => x.id === b.id);
+      if (!d) { if (defs.length >= 10) return json({ error: "기본 MCP는 10개까지예요" }, 400); d = { id: "s" + rid().slice(0, 6) }; defs.push(d); }
+      d.name = name; d.desc = cap(b.desc, 100); d.url = b.url; d.enabled = b.enabled !== false;
+      if (typeof b.token === "string" && b.token.trim()) d.token = b.token.trim().slice(0, 400); else if (b.clearToken) d.token = "";
+      await env.ADMIN_KV.put("mcp:default", JSON.stringify(defs)); return json({ ok: true, items: view() });
+    }
+    return json({ error: "알 수 없는 동작이에요" }, 400);
+  }
   if (p === "/api/admin/dev" && req.method === "GET") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
     const devs = [], items = []; const cnt = {};
@@ -1217,6 +1305,7 @@ export default {
       if (p === "/api/tasks/sync") return req.method === "POST" ? await tasksSync(req, env, url) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/me") return req.method === "GET" ? await me(req, env, url) : json({ error: "GET만 돼요" }, 405);
       if (p === "/api/admin/model-url") return req.method === "POST" ? await registerModelUrl(req, env) : json({ error: "POST만 돼요" }, 405);
+      if (p.startsWith("/api/mcp/")) return await mcpApi(req, env, url);
       if (p.startsWith("/api/admin/")) return await adminApi(req, env, ctx, url, raw);
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/share") || p.startsWith("/api/tools/") || p.startsWith("/api/html/") || p.startsWith("/api/dev/")) return await shareTools(req, env, url, ctx, p);
