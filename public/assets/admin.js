@@ -1,3 +1,4 @@
+let admArm=null;
 /* LAGO 관리자 화면 — /admin (키·사용량), /admin/user (유저 관리)
    app.js 보다 먼저 불러와요. 여기 있는 함수는 화면이 그려질 때 app.js 가 불러 써요. */
 const ADMIN_MAIL="lagem1535@gmail.com";
@@ -12,6 +13,16 @@ const fmtD=ms=>ms?new Date(ms).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"
 const fmtN=n=>n>=1e6?(n/1e6).toFixed(n%1e6?1:0)+"M":n>=1e3?Math.round(n/1e3)+"K":String(n);
 
 /* ---------- /admin : 개요 · 키 ---------- */
+function devShopCard(){const x=S.admDev;
+const head=`<div class="row" style="gap:10px;flex-wrap:wrap"><h2 class="grow" style="margin:0;font-size:16px">DEV 샵 관리</h2><button class="btn sm" data-act="admDevLoad">${x&&x.data?"새로 고침":"불러오기"}</button></div>`;
+if(!x)return `<div class="card" style="padding:16px;display:grid;gap:8px">${head}<p class="muted" style="margin:0;font-size:13px">개발자와 DEV 샵에 올라온 MODE·TOOL을 보고 숨기거나 지워요.</p></div>`;
+if(x.loading)return `<div class="card" style="padding:16px;display:grid;gap:8px">${head}<p class="muted" style="margin:0">불러오는 중…</p></div>`;
+if(x.err)return `<div class="card" style="padding:16px;display:grid;gap:8px">${head}<p class="err" style="margin:0">${esc(x.err)}</p></div>`;
+const d=x.data,fmt=t=>t?new Date(t).toLocaleDateString("ko-KR"):"";
+const devs=d.devs.length?d.devs.map(v=>`<div class="row" style="gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)"><div class="grow" style="min-width:160px"><b>${esc(v.name||"이름 없음")}</b><div class="muted" style="font-size:12.5px">${esc(v.email)} · 올린 것 ${v.count}개 · ${fmt(v.at)}</div></div><button class="btn sm danger" data-act="admDevRevoke" data-uid="${esc(v.uid)}">${admArm==="rv"+v.uid?"한 번 더 눌러 해제":"개발자 해제"}</button></div>`).join(""):`<p class="muted" style="margin:0;font-size:13px">아직 개발자가 없어요.</p>`;
+const its=d.items.length?d.items.map(v=>`<div class="row" style="gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)"><span class="tag">${v.kind==="mode"?"MODE":"TOOL"}</span><div class="grow" style="min-width:160px"><b>${esc(v.name)}</b>${v.hidden?` <span class="tag" style="background:#FDEBEB;color:#B3261E">숨김</span>`:""}${v.restricted?` <span class="tag">초대 전용</span>`:""}<div class="muted" style="font-size:12.5px">${esc(v.owner||"이름 비공개")} · 사용 ${v.runs}회 · ${fmt(v.at)}${v.cover?" · 이미지 있음":""}</div></div><button class="btn sm" data-act="admDevHide" data-id="${esc(v.id)}" data-to="${v.hidden?"show":"hide"}">${v.hidden?"다시 보이기":"숨기기"}</button><button class="btn sm danger" data-act="admDevDel" data-id="${esc(v.id)}">${admArm==="dl"+v.id?"한 번 더 눌러 삭제":"삭제"}</button></div>`).join(""):`<p class="muted" style="margin:0;font-size:13px">올라온 것이 없어요.</p>`;
+return `<div class="card" style="padding:16px;display:grid;gap:10px">${head}<b style="font-size:14px">개발자 ${d.devs.length}명</b><div>${devs}</div><b style="font-size:14px">올라온 것 ${d.items.length}개</b><div>${its}</div><p class="muted" style="margin:0;font-size:12.5px">숨기면 샵에서만 빠지고 링크는 그대로 열려요. 삭제하면 링크도 닫혀요. 개발자를 해제하면 그 사람이 올린 것은 샵에서 빠지고, LAGO DEV를 다시 시작하면 돌아와요.</p></div>`;}
+async function admDevLoad(){S.admDev={loading:true};render();try{S.admDev={data:await admFetch("/api/admin/dev")};}catch(er){S.admDev={err:er.message||"불러오지 못했어요"};}render();}
 async function loadAdmin(){if(!isAdmin()||S.admin&&S.admin.loading)return;S.admin=Object.assign(S.admin||{},{loading:true,err:""});try{const j=await admFetch("/api/admin/status");S.admin={status:j,loading:false,err:"",at:Date.now()};}catch(e){S.admin={loading:false,err:e.message,needVerify:e.needVerify,at:Date.now()};}if(route()==="admin")render();}
 const ADM_SECRETS=[["LLAMA_API_KEY","모델 서버 키 (llama-server)","llama-server를 켤 때 정한 API 키예요. 브라우저에는 절대 보내지 않고, Worker가 Authorization: Bearer 로만 써요. Cloudflare 대시보드의 변수 및 비밀에 넣어도 돼요.","password","API 키"],["MODEL_URL","(예전) 캐글 서버 주소","예전 캐글 노트북(fact_7) 방식이에요. 위의 llama-server 주소·키가 있으면 그쪽을 먼저 써요. 캐글 노트북(fact_7)이 알려 주는 https 주소예요. 노트북을 다시 켤 때마다 바뀌어요.","text","https://….trycloudflare.com"],["MODEL_KEY","(예전) 캐글 서버 비밀번호","노트북에 적은 KEY와 같은 값이에요. 서버가 이 값이 있어야 답해요.","password","긴 임의 문자열"],["FIREBASE_CONFIG","Firebase 웹 설정","로그인·저장에 쓰는 Firebase 웹앱 설정(JSON)이에요. Cloudflare 대시보드의 변수 및 비밀에서만 바꿀 수 있어요.","text","{...}"],["RESEND_API_KEY","Resend 키","보호자·아이 메일 보내기에 써요. re_ 로 시작해요.","password","re_..."],["MAIL_FROM","보내는 사람","예: LAGO &lt;noreply@내도메인.com&gt;. 도메인을 Resend에서 인증해야 아무에게나 보낼 수 있어요. 비워 두면 기본 주소를 써요.","text","LAGO <noreply@example.com>"],["DATA_GO_KR_KEY","공공데이터 키","공공데이터포털(data.go.kr) 일반 인증키(Decoding)예요. 공휴일 답에 써요.","password","인증키"],["FIREBASE_SERVICE_ACCOUNT","Firebase 서비스 계정","유저 관리(목록·정지·요금제)에 써요. Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → ‘새 비공개 키 생성’으로 받은 JSON 파일 내용을 통째로 붙여넣어요. 이 키는 힘이 세요. 가능하면 Cloudflare 대시보드 시크릿으로 넣는 걸 권해요.","area","{ \"type\": \"service_account\", ... }"]];
 const ADM_STATS=[["visits","접속"],["wiki","위키 검색"],["holidays","공휴일 조회"],["kidConsent","아이 가입 요청"],["notify","시간 요청 알림"],["taskRun","예약 작업 실행"],["mailSent","메일 성공"],["mailFail","메일 실패"],["chat","Fonte 질문"]];
@@ -36,6 +47,7 @@ body=`${st.kv?"":admBox("사용량 기록과 키 저장에 쓰는 ADMIN_KV가 �
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${ADM_STATS.map(card).join("")}</div>
 ${llamaCard}
 ${newsCard}
+${devShopCard()}
 <h2 style="margin:10px 0 0;font-size:16px">키와 설정</h2>
 ${ADM_SECRETS.map(sec).join("")}
 <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:10px"><h2 class="grow" style="margin:0;font-size:16px">연결한 API</h2><button class="btn sm pri" data-act="apiAdd">+ API 추가</button></div>
@@ -80,13 +92,17 @@ return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max
 <div class="row" style="flex-wrap:wrap;gap:10px"><div class="grow"><h1>유저 관리</h1><p class="muted" style="margin:0">정지 · 추방 · 요금제 · 사용량 한도</p></div></div>${admNav("admin-user")}${body}</div></div>`);}
 
 /* ---------- 관리자 화면의 클릭·제출 ---------- */
-let admArm=null;
+
 document.addEventListener("click",async e=>{const t=e.target.closest("[data-act]");if(!t)return;const d=t.dataset;
 switch(d.act){
 case"admVerifySend":try{await S.fb.auth.currentUser.sendEmailVerification();toast("인증 메일을 보냈어요");}catch(er){toast("잠시 뒤에 다시 시도해 주세요");}break;
 case"admVerifyDone":try{await S.fb.auth.currentUser.reload();await S.fb.auth.currentUser.getIdToken(true);S.admin=null;S.admUsers=null;render();}catch(er){toast("확인하지 못했어요");}break;
 case"newsTest":try{t.disabled=true;const qq=(document.getElementById("newsQ")||{}).value||"오늘 뉴스";const r=await fetch("/api/news?q="+encodeURIComponent(qq),{headers:{accept:"application/json"},cache:"no-store"});const j=await r.json();S.newsT={q:qq,found:j.found||0,feeds:j.feeds||[],refs:j.refs||[]};}catch(er){S.newsT={q:"오늘 뉴스",err:"시험하지 못했어요: "+er.message};}render();break;
 case"llamaSave":case"llamaTest":try{t.disabled=true;const el=document.getElementById("llamaUrl");const u=el?el.value.trim():"";if(d.act==="llamaSave"){const j=await admFetch("/api/admin/llama","POST",{url:u});S.llama={url:j.url,ok:true,msg:j.url?"저장했어요. ‘연결 확인’을 눌러 보세요.":"주소를 지웠어요."};if(S.admin&&S.admin.status)S.admin.status.llama={url:j.url};}else{if(u&&u!==((S.admin&&S.admin.status&&S.admin.status.llama)||{}).url){const sv=await admFetch("/api/admin/llama","POST",{url:u});if(S.admin&&S.admin.status)S.admin.status.llama={url:sv.url};}const j=await admFetch("/api/admin/llama/test","POST",{});S.llama={url:j.url,ok:!!j.health,msg:(j.msg||"")+(j.ms?" ("+j.ms+"ms)":"")+(j.keySet?"":" · 키 없음")};}}catch(er){S.llama={url:(document.getElementById("llamaUrl")||{}).value||"",ok:false,msg:er.message};}render();break;
+case"admDevLoad":admDevLoad();break;
+case"admDevHide":try{await admFetch("/api/admin/dev/item","POST",{id:d.id,action:d.to});admDevLoad();}catch(er){toast(er.message);}break;
+case"admDevDel":if(admArm!=="dl"+d.id){admArm="dl"+d.id;render();setTimeout(()=>{if(admArm==="dl"+d.id){admArm=null;render();}},4000);break;}admArm=null;try{await admFetch("/api/admin/dev/item","POST",{id:d.id,action:"remove"});toast("지웠어요");admDevLoad();}catch(er){toast(er.message);}break;
+case"admDevRevoke":if(admArm!=="rv"+d.uid){admArm="rv"+d.uid;render();setTimeout(()=>{if(admArm==="rv"+d.uid){admArm=null;render();}},4000);break;}admArm=null;try{await admFetch("/api/admin/dev/revoke","POST",{uid:d.uid});toast("개발자를 해제했어요");admDevLoad();}catch(er){toast(er.message);}break;
 case"apiAdd":S.apiForm=true;render();break;
 case"apiCancel":S.apiForm=false;render();break;
 case"apiDel":try{await admFetch("/api/admin/api/delete","POST",{id:d.id});toast("지웠어요");S.admin=null;loadAdmin();}catch(er){toast(er.message);}break;

@@ -158,7 +158,7 @@ async function shareTools(req, env, url, ctx, p) {
   if (m && req.method === "GET") {
     const o = env.ADMIN_KV && await env.ADMIN_KV.get("tool:" + m[1]);
     let d; try { d = o && JSON.parse(o); } catch {}
-    const mm = d && d.viaDev && !(d.emails && d.emails.length) && /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(d.cover || "");
+    const mm = d && d.viaDev && !d.hidden && !(d.emails && d.emails.length) && /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(d.cover || "");
     if (!mm) return new Response("", { status: 404 });
     const bin = Uint8Array.from(atob(mm[2]), (c) => c.charCodeAt(0));
     return new Response(bin, { headers: { "content-type": mm[1], "cache-control": "public, max-age=600", "x-content-type-options": "nosniff" } });
@@ -172,7 +172,7 @@ async function shareTools(req, env, url, ctx, p) {
       for (const k of l.keys) {
         const o = await env.ADMIN_KV.get(k.name); if (!o) continue;
         let d; try { d = JSON.parse(o); } catch { continue; }
-        if (!d.viaDev || (d.emails && d.emails.length)) continue;
+        if (!d.viaDev || d.hidden || (d.emails && d.emails.length)) continue;
         if (!(await isDev(env, d.owner))) continue;
         out.push({ id: k.name.slice(5), cover: !!d.cover, kind: d.kind || "tool", name: d.name, desc: d.desc || "", owner: d.ownerName || "", at: d.at || 0, runs: d.runs || 0, mine: d.owner === u.localId });
       }
@@ -1059,9 +1059,53 @@ async function adminApi(req, env, ctx, url, raw) {
     if (!saOf(env)) return json({ error: "FIREBASE_SERVICE_ACCOUNT가 없어요. 관리자 화면 → 키와 설정에서 넣어 주세요.", needSa: true }, 503);
     try { await sweep(env); return json({ users: await listUsers(env) }); } catch (e) { return json({ error: String(e.message || e) }, 502); }
   }
+  if (p === "/api/admin/dev" && req.method === "GET") {
+    if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+    const devs = [], items = []; const cnt = {};
+    let cur;
+    for (let n = 0; n < 5; n++) {
+      const l = await env.ADMIN_KV.list({ prefix: "tool:", cursor: cur, limit: 200 });
+      for (const k of l.keys) {
+        const o = await env.ADMIN_KV.get(k.name); if (!o) continue;
+        let d; try { d = JSON.parse(o); } catch { continue; }
+        if (!d.viaDev) continue;
+        cnt[d.owner] = (cnt[d.owner] || 0) + 1;
+        items.push({ id: k.name.slice(5), kind: d.kind || "tool", name: d.name, desc: d.desc || "", owner: d.ownerName || "", ownerUid: d.owner, at: d.at || 0, runs: d.runs || 0, cover: !!d.cover, hidden: !!d.hidden, restricted: !!(d.emails && d.emails.length) });
+      }
+      if (l.list_complete) break; cur = l.cursor;
+    }
+    cur = undefined;
+    for (let n = 0; n < 5; n++) {
+      const l = await env.ADMIN_KV.list({ prefix: "dev:", cursor: cur, limit: 200 });
+      for (const k of l.keys) {
+        const o = await env.ADMIN_KV.get(k.name); if (!o) continue;
+        let d; try { d = JSON.parse(o); } catch { continue; }
+        const uid = k.name.slice(4);
+        devs.push({ uid, name: d.name || "", email: d.email || "", at: d.at || 0, count: cnt[uid] || 0 });
+      }
+      if (l.list_complete) break; cur = l.cursor;
+    }
+    items.sort((x, y) => y.at - x.at); devs.sort((x, y) => y.at - x.at);
+    return json({ devs, items: items.slice(0, 200) });
+  }
   if (req.method !== "POST") return json({ error: "POST만 돼요" }, 405);
   let b = {};
   try { b = await req.json(); } catch {}
+  if (p === "/api/admin/dev/item") {
+    if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+    const id = String(b.id || ""); if (!/^[a-z0-9]{6,16}$/.test(id)) return json({ error: "잘못된 번호예요" }, 400);
+    const key = "tool:" + id, o = await env.ADMIN_KV.get(key);
+    if (!o) return json({ error: "이미 없어요" }, 404);
+    if (b.action === "remove") { await env.ADMIN_KV.delete(key); return json({ ok: true }); }
+    if (b.action === "hide" || b.action === "show") { const d = JSON.parse(o); d.hidden = b.action === "hide"; await env.ADMIN_KV.put(key, JSON.stringify(d)); return json({ ok: true }); }
+    return json({ error: "알 수 없는 동작이에요" }, 400);
+  }
+  if (p === "/api/admin/dev/revoke") {
+    if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+    const uid = String(b.uid || ""); if (!uid || uid.length > 128) return json({ error: "잘못된 사용자예요" }, 400);
+    await env.ADMIN_KV.delete("dev:" + uid);
+    return json({ ok: true });
+  }
   if (p === "/api/admin/users/action") {
     if (!saOf(env)) return json({ error: "FIREBASE_SERVICE_ACCOUNT가 없어요", needSa: true }, 503);
     try { return await userAction(env, a.email, b); } catch (e) { return json({ error: String(e.message || e) }, 502); }
