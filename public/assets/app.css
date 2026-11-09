@@ -530,3 +530,5 @@ h1{font-size:30px;line-height:1.2}
 .plusp .pbody .hint{padding:6px 8px 3px;font-size:11px;letter-spacing:.04em}
 .plusp .pfoot{flex:none;border-top:1px solid var(--line);margin-top:4px;padding-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:4px}
 .plusp .pfoot .opt small{display:none}
+
+.umw .uchip{align-self:flex-end;background:#EFF3F7;color:var(--mut)}
