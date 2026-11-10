@@ -88,7 +88,7 @@
   chat.addEventListener("click", (e) => {
     const b = e.target.closest("[data-cp]"); if (!b) return;
     const t = b.closest(".cw").querySelector("pre").textContent;
-    navigator.clipboard.writeText(t).then(() => { b.textContent = "복사됨 ✓"; setTimeout(() => (b.textContent = "복사"), 1400); }).catch(() => { b.textContent = "복사 실패"; });
+    navigator.clipboard.writeText(t).then(() => { b.textContent = "복사됨"; setTimeout(() => (b.textContent = "복사"), 1400); }).catch(() => { b.textContent = "복사 실패"; });
   });
 
   async function saveSess() {
@@ -104,7 +104,7 @@
   function showAtt() {
     const a = $("#att");
     a.hidden = !page;
-    if (page) $("#attt").textContent = "📄 " + (page.mode === "sel" ? "선택한 글 · " : "") + (page.title || page.url || "이 페이지").slice(0, 60);
+    if (page) $("#attt").textContent = "" + (page.mode === "sel" ? "선택한 글 · " : "") + (page.title || page.url || "이 페이지").slice(0, 60);
   }
   $("#attx").onclick = () => { page = null; showAtt(); };
 
@@ -173,10 +173,10 @@
   async function chip(kind) {
     try {
       page = await getPage(); page.mode = kind === "sel" ? "sel" : "page"; showAtt();
-      if (kind === "page") return ask("이 페이지를 핵심만 요약해 줘", { task: "summary", ctx: page.text, label: "📄 이 페이지 요약", needLogin: true });
+      if (kind === "page") return ask("이 페이지를 핵심만 요약해 줘", { task: "summary", ctx: page.text, label: "이 페이지 요약", needLogin: true });
       if (kind === "sel") {
         if (!page.sel) { toast("페이지에서 글을 드래그해 선택한 뒤 눌러 주세요."); page.sel = ""; return; }
-        return ask("선택한 글을 쉽게 설명해 줘", { ctx: page.sel, label: "✂️ 선택한 글 설명" });
+        return ask("선택한 글을 쉽게 설명해 줘", { ctx: page.sel, label: "선택한 글 설명" });
       }
       q.placeholder = "이 페이지에 대해 질문하세요"; q.focus();
     } catch (e) { toast(e.message); }
@@ -197,7 +197,7 @@
 
   /* ---------- 지난 대화 ---------- */
   function drawHist() {
-    $("#hlist").innerHTML = sessions.length ? sessions.map((s) => `<div class="hi ${cur && cur.id === s.id ? "on" : ""}" data-id="${s.id}"><span class="t">${esc(s.title || "(제목 없음)")}<small>${new Date(s.updated).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · ${s.msgs.filter((m) => m.r === "u").length}번</small></span><button class="ib" data-del="${s.id}" aria-label="지우기">🗑</button></div>`).join("") : '<p class="muted" style="padding:14px">저장된 대화가 없어요.</p>';
+    $("#hlist").innerHTML = sessions.length ? sessions.map((s) => `<div class="hi ${cur && cur.id === s.id ? "on" : ""}" data-id="${s.id}"><span class="t">${esc(s.title || "(제목 없음)")}<small>${new Date(s.updated).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · ${s.msgs.filter((m) => m.r === "u").length}번</small></span><button class="ib" data-del="${s.id}" aria-label="지우기"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>`).join("") : '<p class="muted" style="padding:14px">저장된 대화가 없어요.</p>';
   }
   $("#bHist").onclick = () => { drawHist(); $("#hist").hidden = false; };
   $("#hX").onclick = () => ($("#hist").hidden = true);
@@ -215,7 +215,7 @@
     document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     $("#fMail").hidden = b.dataset.t !== "mail"; $("#fCode").hidden = b.dataset.t !== "code";
   }));
-  async function done(email) { await store.set("lago_cfg", cfg); showLogin(false); if (!cur) newSess(); cur.msgs.push({ r: "a", t: "✓ " + email + " 으로 로그인했어요." }); draw(); }
+  async function done(email) { await store.set("lago_cfg", cfg); showLogin(false); if (!cur) newSess(); cur.msgs.push({ r: "a", t: email + " 으로 로그인했어요." }); draw(); }
   $("#fMail").addEventListener("submit", async (e) => {
     e.preventDefault(); $("#lerr").textContent = "";
     try {
@@ -259,7 +259,7 @@
     if (!p || Date.now() - p.at > 30000) return;
     await chrome.storage.session.remove("pending");
     newSess();
-    if (p.kind === "sel") { page = { title: p.title, url: p.url, sel: p.text, text: "", mode: "sel" }; showAtt(); ask("선택한 글을 쉽게 설명해 줘", { ctx: p.text, label: "✂️ 선택한 글 설명" }); }
+    if (p.kind === "sel") { page = { title: p.title, url: p.url, sel: p.text, text: "", mode: "sel" }; showAtt(); ask("선택한 글을 쉽게 설명해 줘", { ctx: p.text, label: "선택한 글 설명" }); }
     else chip("page");
   }
   try { chrome.storage.onChanged.addListener((c, area) => { if (area === "session" && c.pending && c.pending.newValue) takePending(); }); } catch {}
