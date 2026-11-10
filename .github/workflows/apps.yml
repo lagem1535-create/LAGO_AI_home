@@ -3,7 +3,7 @@ name: LAGO Apps
 on:
   push:
     branches: [main]
-    paths: ["EXE/**", "APK/**", "CLI/**", ".github/workflows/apps.yml"]
+    paths: ["EXE/**", "APK/**", "CLI/**", "EXT/**", ".github/workflows/apps.yml"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -96,7 +96,7 @@ jobs:
         run: |
           echo "v=$(node -p "require('./EXE/package.json').version")" >> "$GITHUB_OUTPUT"
           mkdir -p out && cd CLI && zip -q ../out/lago-cli.zip lago.js lago.cmd install.cmd install.sh uninstall.cmd uninstall.sh package.json README.md
-          cd .. && find out -type f | sort
+          cd .. && (cd EXT && zip -qr ../out/lago-chrome.zip . -x "*.DS_Store") && find out -type f | sort
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: app-v${{ steps.ver.outputs.v }}
@@ -108,6 +108,7 @@ jobs:
             **Mac** `LAGO-Mac-arm64.dmg` (Apple Silicon) · `LAGO-Mac-x64.dmg` (Intel) — 처음에는 우클릭 → 열기
             **Android** `LAGO-Android.apk`
             **터미널** `lago.exe` (Windows, Node 없이) · `lago-cli.zip` (Node 18+)
+            **크롬 확장** `lago-chrome.zip` (압축을 풀고 chrome://extensions 에서 ‘압축해제된 확장 프로그램 로드’)
 
             데스크톱 앱의 명령 실행 · 파일 저장은 매번 확인 창에서 허락한 뒤에만 동작해요.
           files: |

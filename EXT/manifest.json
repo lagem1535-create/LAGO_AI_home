@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "LAGO",
+  "version": "0.1.0",
+  "description": "LAGO AI를 브라우저 옆 패널에서. 보고 있는 페이지 요약 · 선택한 글 설명 · 질문 · 코드.",
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "action": {
+    "default_title": "LAGO 열기",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "host_permissions": [
+    "https://lago-ai-home.lagem1535.workers.dev/*",
+    "https://securetoken.googleapis.com/*",
+    "https://identitytoolkit.googleapis.com/*"
+  ],
+  "minimum_chrome_version": "114"
+}

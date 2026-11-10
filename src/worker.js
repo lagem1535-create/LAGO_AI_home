@@ -431,7 +431,7 @@ async function chat(req, env, url, ctx) {
   const hist = (Array.isArray(b.hist) ? b.hist : []).slice(-6).map((h) => ({ r: h && h.r === "a" ? "a" : "u", t: String((h && h.t) || "").replace(/\s+/g, " ").slice(0, 300) })).filter((h) => h.t);
   const lastU = [...hist].reverse().find((h) => h.r === "u");
   const sq = lastU && q.length <= 30 ? (lastU.t.slice(0, 120) + " " + q).slice(0, 500) : q;
-  const ctxIn = String(b.ctx || "").trim().slice(0, b.task === "code" ? 6000 : 3000);
+  const ctxIn = String(b.ctx || "").trim().slice(0, b.task === "code" ? 6000 : b.page ? 8000 : 3000);
   const histTxt = (ctxIn && b.task !== "agent" ? "첨부한 글:\n" + ctxIn + "\n\n" : "") + (hist.length ? "이전 대화:\n" + hist.map((h) => (h.r === "u" ? "사용자: " : "LAGO: ") + h.t).join("\n") + "\n\n" : "");
   if (task === "ask") {
     // 1순위: Kaggle 서버의 검색 DB(위키·뉴스·법령·판례…)로 답하기 (/ask). 없거나 아직 올리는 중이면 아래 위키백과 방식으로 대신해요.

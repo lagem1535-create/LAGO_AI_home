@@ -7,10 +7,11 @@ const path = require("path");
 const readline = require("readline");
 const { spawn } = require("child_process");
 
-const VERSION = "0.2.1";
+const VERSION = "0.3.0";
 const BASE = (process.env.LAGO_URL || "https://lago-ai-home.lagem1535.workers.dev").replace(/\/+$/, "");
 const DIR = path.join(os.homedir(), ".lago");
 const CFG = path.join(DIR, "config.json");
+const SDIR = path.join(DIR, "sessions");
 const TTY = process.stdout.isTTY && !process.env.NO_COLOR;
 const c = (n, s) => (TTY ? `\x1b[${n}m${s}\x1b[0m` : s);
 const blue = (s) => c("38;5;33", s), green = (s) => c("38;5;35", s), dim = (s) => c("2", s), red = (s) => c("31", s), bold = (s) => c("1", s);
@@ -27,6 +28,9 @@ const HELP = `${bold(blue("LA") + green("GO"))} CLI ${VERSION}
 
   lago login                이메일 · 비밀번호로 로그인
   lago login --code 코드    LAGO 사이트 ‘앱 받기’에서 복사한 연결 코드로 로그인 (Google 계정)
+  lago -c                   마지막 세션 이어하기 (continue)
+  lago -r [번호|이름]       세션 목록에서 골라 이어하기 (resume)
+  lago sessions             저장된 세션 목록
   lago logout / lago whoami / lago --version
   lago uninstall            LAGO CLI 지우기 (로그인 정보 · 설치 파일 · PATH까지)  -y 로 묻지 않고 지우기
 
@@ -35,6 +39,8 @@ const HELP = `${bold(blue("LA") + green("GO"))} CLI ${VERSION}
   /file 경로                파일을 자료로 붙이기
   /save N 파일이름          방금 답의 N번째 코드 블록을 파일로 저장
   /run N                    방금 답의 N번째 명령 블록 실행 (실행 전에 물어봐요)
+  /sessions  /resume [번호]  저장된 세션 보기 · 이어하기
+  /new  /rename 이름  /delete  세션 새로 시작 · 이름 바꾸기 · 지우기
   /clear                    대화 기억 지우기
   /exit                     끝내기
 
@@ -143,6 +149,48 @@ async function wikiOnly(q) {
   return r.extract || "";
 }
 
+
+// ---------- 세션: 대화를 저장해 두고 나중에 이어서 해요 (~/.lago/sessions) ----------
+const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+function sessAll() {
+  let fl = []; try { fl = fs.readdirSync(SDIR).filter((f) => f.endsWith(".json")); } catch { return []; }
+  const out = [];
+  for (const f of fl) { try { const j = JSON.parse(fs.readFileSync(path.join(SDIR, f), "utf8")); if (j && j.id) out.push(j); } catch {} }
+  return out.sort((a, b) => (b.updated || 0) - (a.updated || 0));
+}
+function sessSave(st) {
+  if (!st.log || !st.log.length) return;
+  if (!st.sess) st.sess = { id: rid(), created: Date.now(), title: "" };
+  if (!st.sess.title) st.sess.title = String(st.log[0].q).replace(/\s+/g, " ").slice(0, 36);
+  try {
+    fs.mkdirSync(SDIR, { recursive: true });
+    fs.writeFileSync(path.join(SDIR, st.sess.id + ".json"), JSON.stringify({ ...st.sess, cwd: process.cwd(), code: !!st.code, updated: Date.now(), log: st.log.slice(-60) }));
+  } catch {}
+}
+function ago(t) { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? "방금" : m < 60 ? m + "분 전" : m < 1440 ? Math.round(m / 60) + "시간 전" : Math.round(m / 1440) + "일 전"; }
+function sessLines(list, cur) {
+  if (!list.length) return dim("  저장된 세션이 없어요.");
+  return list.slice(0, 20).map((x, i) => `  ${bold(String(i + 1).padStart(2))}  ${x.title || "(제목 없음)"}${cur && cur.id === x.id ? green("  ← 지금") : ""}\n      ${dim(`${x.code ? "코드" : "대화"} · ${(x.log || []).length}번 · ${ago(x.updated)} · ${x.cwd || ""}`)}`).join("\n");
+}
+function sessPick(list, key) {
+  if (!key) return list[0];
+  const n = Number(key); if (n >= 1 && n <= list.length) return list[n - 1];
+  return list.find((x) => x.id === key) || list.find((x) => (x.title || "").includes(key));
+}
+function sessOpen(st, x) {
+  st.sess = { id: x.id, created: x.created, title: x.title };
+  st.log = x.log || []; st.code = !!x.code;
+  st.hist = []; for (const e of st.log.slice(-2)) st.hist.push({ r: "u", t: String(e.q).slice(0, 300) }, { r: "a", t: String(e.a).slice(0, 300) });
+  st.last = (st.log[st.log.length - 1] || {}).a || "";
+  if (x.cwd && x.cwd !== process.cwd()) { try { if (fs.existsSync(x.cwd)) { process.chdir(x.cwd); console.log(dim("폴더를 옮겼어요: " + x.cwd)); } } catch {} }
+}
+function sessRecap(st) {
+  const tail = st.log.slice(-2); if (!tail.length) return;
+  console.log(dim("  ── 지난 대화 ─────────────────────────────"));
+  for (const e of tail) console.log("  " + blue("나 ") + String(e.q).replace(/\s+/g, " ").slice(0, 90) + "\n  " + green("LAGO ") + String(e.a).replace(/```[\s\S]*?```/g, "[코드]").replace(/\s+/g, " ").slice(0, 120));
+  console.log();
+}
+
 async function chat(q, st) {
   const tok = await idToken();
   if (!tok) return st.code ? (console.log("\n" + red("코드 모드는 로그인이 필요해요.") + " lago login\n"), "") : wikiOnly(q);
@@ -165,6 +213,7 @@ async function chat(q, st) {
   if (src.length) console.log(dim(src.map((s) => `[${s.n}] ${s.title} ${s.url}`).join("\n")) + "\n");
   st.hist.push({ r: "u", t: q.slice(0, 300) }, { r: "a", t: r.j.answer.slice(0, 300) });
   st.last = r.j.answer;
+  if (st.log) { st.log.push({ q: q.slice(0, 2000), a: r.j.answer.slice(0, 6000), at: Date.now() }); if (st.keep) sessSave(st); }
   return r.j.answer;
 }
 
@@ -184,6 +233,27 @@ async function slash(line, st, rl) {
     case "/code": st.code = true; console.log(green("코드 모드") + dim(" · 폴더: " + process.cwd())); break;
     case "/talk": st.code = false; console.log(blue("대화 모드")); break;
     case "/clear": st.hist = []; st.files = []; st.last = ""; console.log(dim("대화 기억을 지웠어요.")); break;
+    case "/new": sessSave(st); st.sess = null; st.log = []; st.hist = []; st.files = []; st.last = ""; console.log(green("새 세션을 시작했어요.") + dim(" (이전 세션은 /sessions 에 저장돼 있어요)")); break;
+    case "/sessions": case "/session": { sessSave(st); console.log("\n" + bold("세션") + dim("  /resume 번호 로 이어하기\n") + sessLines(sessAll(), st.sess) + "\n"); break; }
+    case "/resume": {
+      sessSave(st); const list = sessAll();
+      if (!list.length) { console.log(dim("저장된 세션이 없어요.")); break; }
+      let x = a ? sessPick(list, a) : null;
+      if (!a) { console.log("\n" + sessLines(list, st.sess) + "\n"); x = sessPick(list, await q("이어할 번호: ")); }
+      if (!x) { console.log(red("그 세션을 찾지 못했어요.")); break; }
+      sessOpen(st, x); console.log(green("이어갑니다: ") + (x.title || "") + "\n"); sessRecap(st); break;
+    }
+    case "/rename":
+      if (!a) { console.log(red("쓰는 법: /rename 새 이름")); break; }
+      if (!st.sess) st.sess = { id: rid(), created: Date.now(), title: a }; st.sess.title = a.slice(0, 60); sessSave(st); console.log(green("✓ ") + "세션 이름: " + a.slice(0, 60)); break;
+    case "/delete": {
+      const list = sessAll(); const x = a ? sessPick(list, a) : (st.sess && list.find((y) => y.id === st.sess.id));
+      if (!x) { console.log(red("지울 세션을 찾지 못했어요. 쓰는 법: /delete 번호")); break; }
+      if (!/^y/i.test(await q(`"${x.title}" 세션을 지울까요? (y/N) `))) { console.log(dim("그대로 둘게요.")); break; }
+      try { fs.rmSync(path.join(SDIR, x.id + ".json"), { force: true }); } catch {}
+      if (st.sess && st.sess.id === x.id) { st.sess = null; st.log = []; st.hist = []; st.last = ""; }
+      console.log(dim("지웠어요.")); break;
+    }
     case "/file":
       if (!a || !fs.existsSync(a)) { console.log(red("파일을 찾지 못했어요: ") + a); break; }
       st.files.push(a); console.log(dim("붙였어요: " + a)); break;
@@ -235,11 +305,13 @@ function banner(cfg, st) {
   console.log("  " + dim("─".repeat(Math.min(46, cols - 4))));
   console.log("  " + dim("계정  ") + (cfg.email ? cfg.email : "로그인 안 함 " + dim("→ lago login")));
   console.log("  " + dim("폴더  ") + process.cwd());
+  console.log("  " + dim("세션  ") + (st.sess ? `${st.sess.title || "이어하기"} ${dim(`· ${st.log.length}번 주고받음`)}` : dim("새 세션 · 대화는 자동으로 저장돼요")));
   console.log("  " + dim("모드  ") + (st.code ? green("코드") : blue("대화")) + dim("    /help 도움말   /code 코드 모드   /exit 끝내기"));
   console.log();
 }
 
 async function repl(st) {
+  st.keep = true;
   const cfg = loadCfg();
   banner(cfg, st);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -322,12 +394,34 @@ async function main() {
   if (a0 === "login") return login(args.slice(1));
   if (a0 === "logout") { const cfg = loadCfg(); saveCfg({ apiKey: cfg.apiKey }); return console.log("로그아웃했어요."); }
   if (a0 === "whoami") { const cfg = loadCfg(); return console.log(cfg.email ? cfg.email : "로그인하지 않았어요. (lago login)"); }
-  if (a0 === "code") { st.code = true; args.shift(); }
+  const sl = () => { const l = sessAll(); return l; };
+  if (a0 === "sessions" || a0 === "ls") { console.log("\n" + bold("세션") + dim("  lago -c 로 마지막 것, lago -r 번호 로 골라서 이어하기\n") + sessLines(sl()) + "\n"); return; }
+  let resumeKey, wantResume = false;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "-c" || args[i] === "--continue") { wantResume = true; args.splice(i, 1); i--; }
+    else if (args[i] === "-r" || args[i] === "--resume") { wantResume = true; args.splice(i, 1); if (args[i] && !/^(code|-)/.test(args[i]) && (/^\d+$/.test(args[i]) || args.length === 1)) { resumeKey = args[i]; args.splice(i, 1); } i--; resumeKey = resumeKey || "?"; }
+  }
+  st.keep = false; st.log = [];
+  if (wantResume) {
+    st.keep = true;
+    const list = sl();
+    if (!list.length) console.log(dim("저장된 세션이 없어서 새로 시작해요."));
+    else {
+      let x;
+      if (resumeKey === "?") { console.log("\n" + sessLines(list) + "\n"); x = sessPick(list, await ask("이어할 번호: ")); }
+      else if (resumeKey) x = sessPick(list, resumeKey);
+      else x = list.find((y) => y.cwd === process.cwd()) || list[0];
+      if (!x) { console.log(red("그 세션을 찾지 못했어요.")); return; }
+      sessOpen(st, x); console.log(green("이어갑니다: ") + (x.title || "")); st.resumed = true;
+    }
+  }
+  if (a0 === "code" || args[0] === "code") { st.code = true; if (args[0] === "code") args.shift(); }
   const inter = args[0] === "-i";   // -i: 파이프로 들어온 줄을 대화 입력으로 써요
   if (inter) args.shift();
   const q = args.join(" ").trim();
   if (inter) return repl(st);
   st.piped = await readPipe();
+  if (st.resumed && !q && !st.piped) { sessRecap(st); return repl(st); }
   if (q) { await chat(q, st); return; }
   if (st.piped) { await chat(st.code ? "이 내용을 설명해 줘" : "이 글을 요약해 줘", st); return; }
   await repl(st);
