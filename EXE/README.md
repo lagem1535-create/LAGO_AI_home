@@ -42,10 +42,7 @@ npm run dist       # Windows에서: 설치 파일(nsis) + 포터블 exe → EXE/
 
 ## GitHub Actions로 만들기
 
-`.github/workflows/exe.yml`이 `desktop-v*` 태그를 올리면 Windows에서 EXE를 만들어 Release에 붙여요.
+`.github/workflows/exe.yml`이 `EXE/` 폴더가 바뀐 커밋이 main에 올라오면 Windows에서 EXE를 만들고,
+`desktop-v<버전>` Release에 설치 파일 · 포터블 · zip을 붙여요. 새 버전을 내려면 `package.json`의 `version`을 올려서 커밋하면 돼요.
 
-```bash
-git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
-```
-
-Actions 탭에서 **Run workflow**로 직접 돌릴 수도 있어요 (결과는 Artifacts에 올라가요).
+Actions 탭에서 **Run workflow**로 직접 돌릴 수도 있어요.
