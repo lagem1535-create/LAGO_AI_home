@@ -404,7 +404,7 @@ async function chat(req, env, url, ctx) {
   }
   let b = {}; try { b = await req.json(); } catch {}
   const q = String(b.q || "").trim().slice(0, 500);
-  if (!q && (b.task === undefined || b.task === "ask" || b.task === "agent")) return json({ error: "질문을 적어 주세요" }, 400);
+  if (!q && (b.task === undefined || b.task === "ask" || b.task === "agent" || b.task === "code")) return json({ error: "질문을 적어 주세요" }, 400);
   if (env.ADMIN_KV && !isAdmin) {
     const k = `chat:${u.localId}:${day()}`;
     const n = parseInt((await env.ADMIN_KV.get(k)) || "0", 10);
@@ -412,13 +412,13 @@ async function chat(req, env, url, ctx) {
     await env.ADMIN_KV.put(k, String(n + 1), { expirationTtl: 172800 });
   }
   bump(env, ctx, "chat");
-  const task = ["ask", "agent", "translate", "summary"].includes(b.task) ? b.task : "ask";
+  const task = ["ask", "agent", "translate", "summary", "code"].includes(b.task) ? b.task : "ask";
   let refs = [], system = FACT_SYS, user = "", maxTok = 400, newsMode = false;
   // 앞 대화(최근 몇 줄)로 "어떤 처벌을 해?" 같은 짧은 후속 질문도 이해하게 해요
   const hist = (Array.isArray(b.hist) ? b.hist : []).slice(-6).map((h) => ({ r: h && h.r === "a" ? "a" : "u", t: String((h && h.t) || "").replace(/\s+/g, " ").slice(0, 300) })).filter((h) => h.t);
   const lastU = [...hist].reverse().find((h) => h.r === "u");
   const sq = lastU && q.length <= 30 ? (lastU.t.slice(0, 120) + " " + q).slice(0, 500) : q;
-  const ctxIn = String(b.ctx || "").trim().slice(0, 3000);
+  const ctxIn = String(b.ctx || "").trim().slice(0, b.task === "code" ? 6000 : 3000);
   const histTxt = (ctxIn && b.task !== "agent" ? "첨부한 글:\n" + ctxIn + "\n\n" : "") + (hist.length ? "이전 대화:\n" + hist.map((h) => (h.r === "u" ? "사용자: " : "LAGO: ") + h.t).join("\n") + "\n\n" : "");
   if (task === "ask") {
     // 1순위: Kaggle 서버의 검색 DB(위키·뉴스·법령·판례…)로 답하기 (/ask). 없거나 아직 올리는 중이면 아래 위키백과 방식으로 대신해요.
@@ -504,6 +504,12 @@ async function chat(req, env, url, ctx) {
     const ctxText = refs.length ? refs.map((x, i) => newsMode ? `[${i + 1}] [${x.title}] ${x.publisher} ${x.date}. ${String(x.sum || "").slice(0, 160)}` : `[${i + 1}] [${x.title}] ${String(x.extract).slice(0, 700)}`).join("\n") : "(검색된 자료 없음)";
     user = `참고자료:\n${ctxText}\n\n${newsMode ? "" : histTxt.replace(/^첨부한 글:[\s\S]*?\n\n/, "")}질문: ${q}`;
     if (newsMode) maxTok = 160;
+  } else if (task === "code") {
+    // CODE 영역: 코드를 쓰고 고쳐요. 작업 폴더의 파일 목록·내용(ctx)을 함께 받아요.
+    system = "너는 LAGO CODE다. 요청에 맞는 코드를 쓰거나 고쳐라. 코드는 ```언어 코드블록에 넣고, 설명은 짧게 한국어로 써라. " +
+      "실행해야 할 명령이 있으면 ```bash 블록에 따로 써라. 폴더 자료가 주어지면 그 파일 이름과 내용에 맞춰라. 모르는 것은 지어내지 마라.";
+    user = (ctxIn ? "작업 폴더:\n" + ctxIn + "\n\n" : "") + (hist.length ? "이전 대화:\n" + hist.map((h) => (h.r === "u" ? "사용자: " : "LAGO: ") + h.t).join("\n") + "\n\n" : "") + "요청: " + q;
+    maxTok = 900;
   } else if (task === "agent") {
     const ag = b.agent || {};
     const nm = String(ag.name || "에이전트").slice(0, 40), ins = String(ag.instructions || "").slice(0, 1500);
@@ -545,7 +551,7 @@ async function chat(req, env, url, ctx) {
   const mcpSrv = lurl && task === "ask" && !newsMode ? await userServers(env, u.localId) : [];
   const mcpList = mcpSrv.length ? await serverTools(mcpSrv) : [];
   const mcpOpts = { allow: new Set(mcpSrv.allow || []), ok: (Array.isArray(b.mcpOk) ? b.mcpOk : []).slice(0, 3).filter((x) => x && typeof x.tool === "string").map((x) => ({ tool: x.tool.slice(0, 100), args: x.args && typeof x.args === "object" ? x.args : {} })), no: (Array.isArray(b.mcpNo) ? b.mcpNo : []).slice(0, 5).map((x) => String(x).slice(0, 100)) };
-  const capTok = maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300);
+  const capTok = task === "code" ? maxTok : maxTok < (b.lang === "en" || richAsk ? 700 : 300) ? maxTok : (b.lang === "en" || richAsk ? 700 : 300);
   const callModel = async () => (mcpList.length
     ? runWithMcp((s2, u2) => llamaChat(env, lurl, s2, u2, mcpList.length ? Math.max(capTok, 500) : capTok, ac.signal, okModel(b.model)), mcpList, system, user, { ...mcpOpts, q })
     : llamaChat(env, lurl, system, user, capTok, ac.signal, okModel(b.model)));
@@ -584,7 +590,7 @@ async function chat(req, env, url, ctx) {
       if (!r.ok) return json({ error: "모델이 응답하지 못했어요 (" + r.status + ")", modelDown: true }, 502);
       d = await r.json();
     }
-    let ans = String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
+    let ans = (task === "code" ? String(d.answer || "") : String(d.answer || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)")).trim().slice(0, task === "code" ? 8000 : 4000);
     if (!ans) return json({ error: "빈 답이 왔어요", modelDown: true }, 502);
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
     return json({ answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(mcpList.fail && mcpList.fail.length ? { mcpErr: mcpList.fail } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) });

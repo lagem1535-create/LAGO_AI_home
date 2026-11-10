@@ -1,0 +1,54 @@
+{
+  "name": "lago-desktop",
+  "productName": "LAGO",
+  "version": "0.1.0",
+  "description": "LAGO AI Desktop - 작업 폴더 · 터미널 · 코드 저장이 되는 Windows 앱",
+  "main": "main.js",
+  "author": "LAGO AI",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable --publish never",
+    "dist:zip": "electron-builder --win zip --publish never"
+  },
+  "devDependencies": {
+    "electron": "43.8.3",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "ai.lago.desktop",
+    "productName": "LAGO",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "LAGO-Windows-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "LAGO",
+      "artifactName": "LAGO-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "LAGO-Portable-${version}.exe"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lagem1535-create/lago_ai_home.git"
+  }
+}

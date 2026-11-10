@@ -83,7 +83,8 @@ function rich(text){let t=String(text||"").replace(/\r/g,"");const stash=[];cons
  t=t.replace(/```([A-Za-z0-9_-]*)[ \t]*\n([\s\S]*?)```/g,(m,lang,code)=>{lang=lang.toLowerCase();
   if(lang==="chart"||lang==="graph"||lang==="plot"){const c=chart(code.trim());if(c)return put(c);}
   if(lang==="math"||lang==="latex"||lang==="tex")return put(`<div class="mathb">${tex(code.trim())}</div>`);
-  return put(`<pre class="codeb"><code>${E(code.replace(/\n$/,""))}</code></pre>`);});
+  const D=window.lagoDesktop,sh=/^(bash|sh|shell|zsh|console|cmd|bat|powershell|ps1|ps)$/.test(lang);
+  return put(`<div class="codewrap" data-lang="${E(lang)}"><div class="codebar"><span>${E(lang||"code")}</span><span class="cbgrow"></span>${D&&sh?'<button type="button" class="cbtn" data-act="runcode">실행</button>':""}${D&&!sh?'<button type="button" class="cbtn" data-act="savecode">파일로 저장</button>':""}<button type="button" class="cbtn" data-act="cpcode">복사</button></div><pre class="codeb"><code>${E(code.replace(/\n$/,""))}</code></pre></div>`);});
  t=t.replace(/\$\$([\s\S]+?)\$\$/g,(m,a)=>put(`<div class="mathb">${tex(a.trim())}</div>`)).replace(/\\\[([\s\S]+?)\\\]/g,(m,a)=>put(`<div class="mathb">${tex(a.trim())}</div>`))
   .replace(/\\\(([\s\S]+?)\\\)/g,(m,a)=>put(`<span class="math">${tex(a.trim())}</span>`))
   .replace(/\$([^\s$](?:[^$\n]*?[^\s$])?)\$(?![\d$])/g,(m,a)=>put(`<span class="math">${tex(a)}</span>`));
