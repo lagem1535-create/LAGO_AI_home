@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 서명 키: ANDROID_KEYSTORE(파일 경로) · ANDROID_KEYSTORE_PASS · ANDROID_KEY_ALIAS 환경 변수가 있으면 그 키로,
+// 없으면 디버그 키로 서명해요 (디버그 키는 빌드한 컴퓨터마다 달라서, 업데이트하려면 지우고 다시 깔아야 해요).
+def ks = System.getenv("ANDROID_KEYSTORE")
+
+android {
+    namespace 'ai.lago.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'ai.lago.app'
+        minSdk 24
+        targetSdk 34
+        versionCode((System.getenv("VERSION_CODE") ?: "1") as int)
+        versionName(System.getenv("VERSION_NAME") ?: "0.2.0")
+    }
+    signingConfigs {
+        release {
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASS")
+                keyAlias(System.getenv("ANDROID_KEY_ALIAS") ?: "lago")
+                keyPassword System.getenv("ANDROID_KEYSTORE_PASS")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ks ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint { abortOnError false; checkReleaseBuilds false }
+}

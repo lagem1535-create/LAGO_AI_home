@@ -54,7 +54,7 @@ const me=()=>S.goccia?{name:"지우",plan:"Goccia",email:"kid"}:S.user;
 const allAgents=()=>[...S.myAgents,...OFFICIAL];
 const agentById=id=>allAgents().find(a=>a.id===id);
 /* ---------- router ---------- */
-const ROUTES=["dev","dev-list","html-pub","shared","tools","tool-new","tool-my","tool-pub","share-view","tool-translate","tool-spell","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","guardian","admin","admin-user"];
+const ROUTES=["dev","dev-list","html-pub","shared","tools","tool-new","tool-my","tool-pub","share-view","tool-translate","tool-spell","tool-extract","tool-summary","services","tasks","usage","agents","agent-new","agent","login","join","verify","kid","home","chat","projects","project","code","code-chat","code-folder","plans","prefs","terms","apps","guardian","admin","admin-user"];
 const PUBLIC=["html-pub","login","join","verify","kid","terms","share-view","tool-pub"];
 const PATHMODE=(()=>{const m=document.querySelector('meta[name="lago-router"]');return !!m&&m.content==="path"&&/^https?:$/.test(location.protocol)&&!!history.pushState;})();
 /* 주소: 서버에서는 /chat, /chat/<대화번호>, /admin/user 처럼 실제 경로를 써요. 미리보기(한 파일)에서는 #chat 처럼 #을 써요. */
@@ -198,7 +198,7 @@ function acctMenu(){const kid=S.goccia;const plan=S.user.plan||"Free";const it=(
 return `<div class="acctwrap" data-act="acct"></div><div class="acct" role="menu" aria-label="계정 메뉴"><div class="acchead">${esc(kid?"지우 · LAGO Goccia":S.user.email)}</div>
 ${kid?it("swap",esc(S.user.name)+" 계정으로 돌아가기",'data-act="asMe"')+it("file","이용약관",'data-go="terms"'):
 it("sliders","설정",'data-go="prefs"','<span class="kb">Ctrl+,</span>')+it("share","공유",'data-go="shared"')+it("check","LAGO DEV",'data-go="dev"')+it("gauge","사용량",'data-go="usage"','<span class="kb">'+usagePct()+'%</span>')+(isAdmin()?it("shield","관리자",'data-go="admin"'):"")+(S.guardian?it("shield","보호자 화면",'data-go="guardian"',pendingReq()?'<span class="maxtag" style="background:#FDE8E4;color:#C0392B;border-color:transparent">요청 '+pendingReq()+'</span>':""):"")+"<hr>"+themeLang()+"<hr>"+
-(plan==="Max"?it("crown","플랜 관리",'data-go="plans"','<span class="maxtag">MAX</span>'):it("upc","플랜 업그레이드",'data-go="plans"'))+(DESK?"":it("download","LAGO Desktop (EXE)",'data-act="dl"'))+it("file","이용약관",'data-go="terms"')}
+(plan==="Max"?it("crown","플랜 관리",'data-go="plans"','<span class="maxtag">MAX</span>'):it("upc","플랜 업그레이드",'data-go="plans"'))+it("download","앱 받기",'data-go="apps"')+it("file","이용약관",'data-go="terms"')}
 <hr>${it("logout","로그아웃",'data-act="logout"')}</div>`;}
 function tempBar(){const c=curChat();const inTemp=c&&c.temp&&(route()==="chat"||route()==="code-chat");const n=S.chats.filter(x=>x.temp).length;const ttl=["창을 닫으면","1시간 뒤","24시간 뒤"][S.ttl||0];
 let left="";if(inTemp&&S.ttl){const ms=c.created+(S.ttl===1?36e5:864e5)-Date.now();left=` · 남은 시간 ${Math.max(0,Math.floor(ms/6e4))}분`;}
@@ -819,7 +819,7 @@ if(!S.user&&!PUBLIC.includes(r)){if(PATHMODE&&!S.after)S.after=location.pathname
 if(S.user&&(r==="login"||r==="join")){go("home",true);return;}
 if(S.goccia&&["prefs","plans","guardian","agent-new","usage","tasks","services","tool-translate","tool-spell","tool-extract","tool-summary","tools","tool-new","tool-my","tool-pub"].includes(r)){toast("아이 계정에서는 열 수 없는 화면이에요");go("home",true);return;}
 if(r==="code"||r==="code-chat"||r==="code-folder")S.area="code";else if(["home","chat","projects","project","agents","agent","agent-new"].includes(r))S.area="talk";
-const v={dev:vDev,"dev-list":vDevList,"html-pub":vHtmlPub,shared:vShared,tools:vTools,"tool-new":vToolNew,"tool-my":vToolMy,"tool-pub":vToolPub,"share-view":vShareView,"tool-translate":vTool,"tool-spell":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,terms:vTerms,guardian:vGuardian}[r];
+const v={dev:vDev,"dev-list":vDevList,"html-pub":vHtmlPub,shared:vShared,tools:vTools,"tool-new":vToolNew,"tool-my":vToolMy,"tool-pub":vToolPub,"share-view":vShareView,"tool-translate":vTool,"tool-spell":vTool,"tool-extract":vTool,"tool-summary":vTool,services:vServices,tasks:vTasks,usage:vUsage,admin:vAdmin,"admin-user":vAdminUser,agents:vAgents,"agent-new":vAgentNew,agent:vAgent,login:vLogin,join:vJoin,verify:vVerify,kid:vKid,home:vHome,chat:vChat,"code-chat":vChat,projects:vProjects,project:vProject,code:vCode,"code-folder":vFolder,plans:vPlans,prefs:vPrefs,apps:vApps,terms:vTerms,guardian:vGuardian}[r];
 const html=v();if(!html)return;const rk=location.pathname+location.hash,oldSc=document.querySelector(".main > .scroll"),keepTop=oldSc&&S.rk===rk?oldSc.scrollTop:0,qv=S.rk===rk&&$("#q")?$("#q").value:"";S.rk=rk;$("#app").innerHTML=html;fitPop();requestAnimationFrame(fitPop);if(keepTop){const ns=document.querySelector(".main > .scroll");if(ns&&!$("#sc"))ns.scrollTop=keepTop;}
 const sc=$("#sc");if(sc)sc.scrollTop=sc.scrollHeight;
 if($("#bc"))startBrand();
@@ -975,7 +975,9 @@ case"setTheme":setTheme(d.v);break;
 case"setLang":setLang(d.v);break;
 case"lang":S.acct=true;render();break;
 case"help":go("terms");break;
-case"dl":S.acct=false;try{window.open(DESK_URL,"_blank","noopener");}catch(er){}toast("LAGO Desktop(EXE) 받는 곳을 열었어요 · 깃허브 Releases");render();break;
+case"dl":S.acct=false;go("apps");break;
+case"pwaInstall":if(S.pwa){try{S.pwa.prompt();await S.pwa.userChoice;}catch(er){}S.pwa=null;render();}break;
+case"cliCode":{const u=S.fb&&S.fb.auth&&S.fb.auth.currentUser;if(!u||!u.refreshToken){toast("실제 계정으로 로그인한 뒤에 복사할 수 있어요");break;}try{await navigator.clipboard.writeText(u.refreshToken);toast("연결 코드를 복사했어요 · lago login --code 뒤에 붙여 넣어요");}catch(er){toast("복사하지 못했어요");}break;}
 case"more":toast("LAGO 소개 · 블로그는 공개 때 열려요");break;
 case"study":S.study=!S.study;render();toast(S.study?"공부 모드: 답 대신 풀이를 같이 생각해요":"공부 모드를 껐어요");break;
 case"askTime":{const rs=(($("#treason")||{}).value||"").trim().slice(0,60);S.kidReqs.unshift({id:"r"+Date.now(),reason:rs,at:Date.now(),status:"pending"});syncReq();save();render();toast("보호자에게 요청을 보냈어요");
@@ -1175,7 +1177,7 @@ async function termRun(line){line=String(line||"").trim();if(!line)return;WF.his
  }catch(e){termPrint("err",(e&&e.message)||"실패했어요");}}
 function termToggle(open){if(S.goccia){toast("아이 계정에서는 터미널을 쓸 수 없어요");return;}S.term=open===undefined?!S.term:open;const r=route();if(S.term&&!["code","code-chat","code-folder"].includes(r)){S.area="code";go("code-folder");}else render();if(S.term)setTimeout(termFocus,0);}
 function fileView(){if(!WF.open)return "";const t=WF.openTxt;return `<div class="card fileview" style="display:grid;gap:8px;min-width:0"><div class="row" style="gap:8px;flex-wrap:wrap"><b class="grow" style="font:600 13px var(--mono);word-break:break-all">${esc(WF.open)}</b><button class="btn sm" data-act="fileAsk">${ic("code",14)} 이 파일로 묻기</button><button class="iconbtn" data-act="fileClose" aria-label="파일 닫기">${ic("x",15)}</button></div><pre class="codeb" style="max-height:420px;margin:0"><code>${esc(t.slice(0,30000))}</code></pre>${t.length>30000?`<span class="muted" style="font-size:12px">앞 30,000자만 보여요</span>`:""}</div>`;}
-function deskCard(){return `<div class="card" style="display:grid;gap:8px"><div class="row" style="gap:8px">${ic("monitor",17)}<b class="grow">LAGO Desktop (Windows EXE)</b>${DESK?`<span class="tag" style="background:var(--gt);color:var(--g)">실행 중</span>`:""}</div><span class="muted" style="font-size:13px">${DESK?"이 창은 LAGO Desktop이에요. 폴더 읽기 · 명령 실행 · 파일 저장이 모두 돼요. 실행과 저장은 항상 확인 창에서 허락한 뒤에만 해요.":"EXE로 쓰면 이 폴더에서 npm · python · git 같은 명령을 실제로 실행하고, 답에 나온 코드를 파일로 저장할 수 있어요."}</span>${DESK?"":`<a class="btn sm" href="${DESK_URL}" target="_blank" rel="noopener">${ic("download",14)} LAGO Desktop 받기</a>`}</div>`;}
+function deskCard(){return `<div class="card" style="display:grid;gap:8px"><div class="row" style="gap:8px">${ic("monitor",17)}<b class="grow">LAGO Desktop (Windows EXE)</b>${DESK?`<span class="tag" style="background:var(--gt);color:var(--g)">실행 중</span>`:""}</div><span class="muted" style="font-size:13px">${DESK?"이 창은 LAGO Desktop이에요. 폴더 읽기 · 명령 실행 · 파일 저장이 모두 돼요. 실행과 저장은 항상 확인 창에서 허락한 뒤에만 해요.":"EXE로 쓰면 이 폴더에서 npm · python · git 같은 명령을 실제로 실행하고, 답에 나온 코드를 파일로 저장할 수 있어요."}</span>${DESK?"":`<button class="btn sm" data-go="apps">${ic("download",14)} LAGO Desktop 받기</button>`}</div>`;}
 const DESK_URL="https://github.com/lagem1535-create/LAGO_AI_home/releases/latest";
 /* 사용량: 이 기기에서 실제로 주고받은 글자 수로 세요 (글자 2개 ≈ 1토큰) */
 const dayKey=(ms)=>new Date((ms||Date.now())+9*36e5).toISOString().slice(0,10);
@@ -1183,6 +1185,21 @@ const useKey=()=>"lago_use_"+((S.user&&(S.user.uid||S.user.email))||"me");
 function useAdd(mode,a,b){try{const u=store.get(useKey(),{})||{};const k=dayKey();const d=u[k]||(u[k]={t:0,n:0,by:{}});const tk=Math.ceil((String(a||"").length+String(b||"").length)/2);d.t+=tk;d.n++;d.by[mode]=(d.by[mode]||0)+tk;const ks=Object.keys(u).sort();while(ks.length>30)delete u[ks.shift()];store.set(useKey(),u);}catch(e){}}
 function useDay(k){const u=store.get(useKey(),{})||{};return u[k]||{t:0,n:0,by:{}};}
 
+const REL="https://github.com/lagem1535-create/LAGO_AI_home/releases/latest/download/";
+const IN_APK=/LAGOAndroid\//.test(navigator.userAgent);
+function vApps(){let alone=false;try{alone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;}catch(e){}
+const dl=(f,l,sub)=>`<a class="btn sm" href="${REL+f}" target="_blank" rel="noopener">${ic("download",14)} ${l}${sub?` <span class="muted" style="font-weight:400">${sub}</span>`:""}</a>`;
+const card=(k,t,on,body)=>`<div class="card" style="display:grid;gap:10px;align-content:start;min-width:0"><div class="row" style="gap:8px">${ic(k,18)}<b class="grow" style="font-size:15px">${t}</b>${on?`<span class="tag" style="background:var(--gt);color:var(--g)">지금 쓰는 중</span>`:""}</div>${body}</div>`;
+const cmd=t=>`<pre class="codeb" style="margin:0;font-size:12.5px"><code>${esc(t)}</code></pre>`;
+return shell(`${topbar("")}<div class="scroll"><div class="wrap page" style="max-width:920px;display:grid;gap:16px">
+<div><h1>앱 받기</h1><p class="muted" style="margin:0">폰 · 태블릿 · PC · 터미널 어디서든 같은 계정으로 로그인해서 써요.</p></div>
+${card("monitor","이 기기에 바로 설치 (홈 화면에 추가)",alone&&!DESK&&!IN_APK,`<span class="muted" style="font-size:13px">내려받지 않고 지금 보는 사이트를 앱처럼 설치해요. 어느 기기에서나 돼요.</span>${S.pwa?`<div><button class="btn pri sm" data-act="pwaInstall">${ic("download",14)} 지금 설치</button></div>`:""}<div style="display:grid;gap:4px;font-size:13px"><span><b>iPhone · iPad</b> Safari에서 공유 버튼 → ‘홈 화면에 추가’</span><span><b>Android</b> Chrome 메뉴(⋮) → ‘앱 설치’ 또는 ‘홈 화면에 추가’</span><span><b>PC · Mac</b> Chrome · Edge 주소창 오른쪽의 설치 아이콘</span></div>`)}
+<div class="split" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+${card("monitor","Windows",DESK&&DESK.platform==="win32",`<span class="muted" style="font-size:13px">작업 폴더 · 터미널 · 코드 저장까지 되는 LAGO Desktop이에요.</span><div class="row" style="gap:8px;flex-wrap:wrap">${dl("LAGO-Setup.exe","설치 파일")}${dl("LAGO-Portable.exe","포터블","설치 없이")}</div><span class="muted" style="font-size:12px">처음 실행할 때 파란 경고 창이 뜨면 ‘추가 정보 → 실행’을 눌러요.</span>`)}
+${card("monitor","Mac",DESK&&DESK.platform==="darwin",`<span class="muted" style="font-size:13px">Windows와 같은 LAGO Desktop이에요.</span><div class="row" style="gap:8px;flex-wrap:wrap">${dl("LAGO-Mac-arm64.dmg","Apple Silicon","M1 이후")}${dl("LAGO-Mac-x64.dmg","Intel")}</div><span class="muted" style="font-size:12px">서명이 없는 앱이라 처음에는 앱을 우클릭 → ‘열기’로 열어요.</span>`)}
+${card("monitor","Android (APK)",IN_APK,`<span class="muted" style="font-size:13px">폰 · 태블릿에 까는 앱이에요.</span><div class="row" style="gap:8px;flex-wrap:wrap">${dl("LAGO-Android.apk","APK 받기")}</div><span class="muted" style="font-size:12px">받은 파일을 열고 ‘출처를 알 수 없는 앱 설치’를 허용해요.</span>`)}
+${card("term","터미널 (CLI)",false,`<span class="muted" style="font-size:13px">CMD · PowerShell · 맥 터미널에서 <b>lago</b> 명령으로 써요.</span><div class="row" style="gap:8px;flex-wrap:wrap">${dl("lago.exe","Windows용 lago.exe")}${dl("lago-cli.zip","lago-cli.zip","Node 18+")}</div>${cmd('lago login\nlago "독도는 어디에 있어?"\nlago code "app.py 버그 고쳐 줘"')}<span class="muted" style="font-size:12px">Google로 가입했다면 아래 연결 코드를 복사해 <b>lago login --code</b> 뒤에 붙여요. 이 코드는 비밀번호와 같으니 남에게 보여 주지 마세요.</span><div><button class="btn sm" data-act="cliCode">${ic("copy",14)} 연결 코드 복사</button></div>`)}
+</div></div></div>`);}
 /* ---------- boot ---------- */
 initSet();applySet();S.theme=store.get("lago_theme","light");S.lang=store.get("lago_lang","ko");applyTheme();document.documentElement.setAttribute("lang",S.lang);try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(S.theme==="system")applyTheme();});}catch(e){}
 S.sideOff=store.get("lago_sideoff",false)===true;{const _r=render;render=function(){_r();fixPops();trUI();};}
@@ -1200,5 +1217,6 @@ return `<main style="min-height:100dvh;display:grid;place-items:center;padding:2
 /* admin.js(별도 파일)가 쓰는 것들을 바깥으로 내보내요 */
 Object.assign(window,{S,shell,topbar,esc,toast,go,route,WM});window.render=()=>render();
 if(DESK&&DESK.current)DESK.current().then(async r=>{if(r&&r.name){WF.name=r.name;WF.path=r.path;try{WF.files=await DESK.list();wfSort();}catch(e){}render();}}).catch(()=>{});
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();S.pwa=e;if(route()==="apps")render();});
 loadUser();S.booting=!S.user&&/^https?:$/.test(location.protocol)&&!!store.get("lago_fbhint",0);render();loadApi().finally(()=>{if(!(S.api&&S.api.firebase&&S.api.firebase.apiKey))bootDone();});setTimeout(bootDone,8000);
 })();

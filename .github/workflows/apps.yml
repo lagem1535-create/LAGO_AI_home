@@ -1,0 +1,117 @@
+name: LAGO Apps
+# EXE · APK · CLI 폴더가 바뀌어 main에 올라오면 Windows · Mac · Android · CLI를 만들어 Release(app-v<버전>)에 붙여요.
+on:
+  push:
+    branches: [main]
+    paths: ["EXE/**", "APK/**", "CLI/**", ".github/workflows/apps.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: LAGO Desktop (설치 파일 · 포터블)
+        working-directory: EXE
+        run: |
+          npm install --no-audit --no-fund
+          npx electron-builder --win nsis portable --x64 --publish never
+      - name: lago.exe (Node 없이 도는 CLI)
+        working-directory: CLI
+        continue-on-error: true
+        shell: bash
+        run: |
+          node --experimental-sea-config sea-config.json
+          node -e "require('fs').copyFileSync(process.execPath,'lago.exe')"
+          npx --yes postject@1.0.0-alpha.6 lago.exe NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+          ./lago.exe --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            EXE/dist/*.exe
+            CLI/lago.exe
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: LAGO Desktop (dmg)
+        working-directory: EXE
+        run: |
+          npm install --no-audit --no-fund
+          npx electron-builder --mac dmg --x64 --arm64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: EXE/dist/*.dmg
+  android:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: 서명 키 (있을 때만)
+        run: |
+          echo "VERSION_NAME=$(node -p "require('./EXE/package.json').version")" >> "$GITHUB_ENV"
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/lago.jks"
+            echo "ANDROID_KEYSTORE=$RUNNER_TEMP/lago.jks" >> "$GITHUB_ENV"
+          fi
+      - name: APK
+        working-directory: APK
+        run: |
+          gradle assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk LAGO-Android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: APK/LAGO-Android.apk
+  release:
+    needs: [windows, mac, android]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - id: ver
+        run: |
+          echo "v=$(node -p "require('./EXE/package.json').version")" >> "$GITHUB_OUTPUT"
+          mkdir -p out && cd CLI && zip -q ../out/lago-cli.zip lago.js lago.cmd install.cmd install.sh package.json README.md
+          cd .. && find out -type f | sort
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-v${{ steps.ver.outputs.v }}
+          name: LAGO ${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: "true"
+          body: |
+            **Windows** `LAGO-Setup.exe` (설치) · `LAGO-Portable.exe` (설치 없이)
+            **Mac** `LAGO-Mac-arm64.dmg` (Apple Silicon) · `LAGO-Mac-x64.dmg` (Intel) — 처음에는 우클릭 → 열기
+            **Android** `LAGO-Android.apk`
+            **터미널** `lago.exe` (Windows, Node 없이) · `lago-cli.zip` (Node 18+)
+
+            데스크톱 앱의 명령 실행 · 파일 저장은 매번 확인 창에서 허락한 뒤에만 동작해요.
+          files: |
+            out/**/*.exe
+            out/**/*.dmg
+            out/**/*.apk
+            out/*.zip

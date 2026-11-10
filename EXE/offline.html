@@ -3,5 +3,5 @@
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:"Malgun Gothic",system-ui,sans-serif;background:#fff;color:#111A33}
 main{text-align:center;display:grid;gap:12px;padding:24px;max-width:420px}b{font-size:28px;letter-spacing:.02em;background:linear-gradient(90deg,#2563EB,#16A34A);-webkit-background-clip:text;color:transparent}
 p{margin:0;color:#56627A;line-height:1.6}button{justify-self:center;border:0;border-radius:11px;padding:10px 20px;font:600 15px inherit;color:#fff;background:linear-gradient(90deg,#2563EB,#16A34A);cursor:pointer}</style></head>
-<body><main><b>LAGO</b><p>인터넷에 연결하지 못했어요.<br>연결을 확인하고 다시 시도해 주세요.</p><button id="r">다시 시도</button></main>
+<body style="-webkit-app-region:drag"><main><b>LAGO</b><p style="-webkit-app-region:no-drag">인터넷에 연결하지 못했어요.<br>연결을 확인하고 다시 시도해 주세요.</p><button id="r" style="-webkit-app-region:no-drag">다시 시도</button></main>
 <script>document.getElementById("r").onclick=()=>window.lagoRetry&&window.lagoRetry();</script></body></html>

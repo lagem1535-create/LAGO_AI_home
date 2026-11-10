@@ -12,6 +12,21 @@ const SKIP = new Set(["node_modules", ".git", "__pycache__", ".venv", "venv", "d
 const CFG = () => path.join(app.getPath("userData"), "lago-desktop.json");
 const MAX_READ = 400 * 1024, MAX_WRITE = 2 * 1024 * 1024, MAX_OUT = 200 * 1024, RUN_MS = 5 * 60 * 1000;
 
+const MAC = process.platform === "darwin", WIN = process.platform === "win32";
+const BAR_H = 36;
+// 창 위쪽 띠: 기본 제목 표시줄 대신 앱과 같은 색의 얇은 띠를 그려요 (끌어서 창 이동).
+const BAR_CSS = `
+#app{position:fixed!important;top:${BAR_H}px;left:0;right:0;bottom:0;height:auto!important;overflow:auto;transform:translateZ(0)}
+.shell{height:100%!important;min-height:0!important}
+.auth,.pubpage,.splash{min-height:100%!important}
+.acct{max-height:calc(100dvh - 132px)!important}.flyout{max-height:calc(100dvh - 156px)!important}
+body::before{content:"LAGO";position:fixed;top:0;left:0;right:0;height:${BAR_H}px;box-sizing:border-box;display:flex;align-items:center;${MAC ? "justify-content:center;" : "padding-left:38px;"}
+ font:700 12.5px/1 "IBM Plex Sans KR",system-ui,sans-serif;letter-spacing:.14em;color:#0B2A6F;background:#fff;border-bottom:1px solid #E6EBF5;-webkit-app-region:drag;user-select:none;z-index:2147483000}
+${MAC ? "" : `body::after{content:"";position:fixed;top:${(BAR_H - 16) / 2}px;left:14px;width:16px;height:16px;border-radius:5px;background:linear-gradient(135deg,#2563EB,#16A34A);z-index:2147483001;pointer-events:none}`}
+html[data-lago=dark] body::before{background:#212121;color:#E5E7EB;border-bottom-color:#2E2E2E}
+`;
+const SYMBOL = { light: "#0B2A6F", dark: "#E5E7EB" };
+
 let win = null;
 let root = null;
 
@@ -93,7 +108,7 @@ ipcMain.handle("lago:run", async (e, cmd, cwdRel) => {
     const ok = await ask("이 명령을 실행할까요?", `폴더: ${cwd}\n\n${cmd}\n\n실행한 결과는 되돌릴 수 없을 수도 있어요. 내용을 꼭 확인해 주세요.`, "실행");
     if (!ok) return { denied: true };
     return await new Promise((res) => {
-      const full = process.platform === "win32" ? "chcp 65001>nul & " + cmd : cmd;
+      const full = WIN ? "chcp 65001>nul & " + cmd : cmd;
       const ch = spawn(full, { cwd, shell: true, windowsHide: true, env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
       let out = "", err = "", timeout = false;
       const add = (s, d) => (s.length < MAX_OUT ? s + d.toString("utf8") : s);
@@ -112,6 +127,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: c.w || 1280, height: c.h || 840, minWidth: 380, minHeight: 520,
     title: "LAGO", backgroundColor: "#ffffff", autoHideMenuBar: true,
+    titleBarStyle: MAC ? "hiddenInset" : "hidden",
+    ...(MAC ? { trafficLightPosition: { x: 13, y: 11 } } : { titleBarOverlay: { color: "rgba(0,0,0,0)", symbolColor: SYMBOL.light, height: BAR_H } }),
     icon: path.join(__dirname, "build", "icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -134,10 +151,15 @@ function createWindow() {
   win.webContents.on("did-fail-load", (ev, code, desc, url, isMain) => {
     if (isMain && code !== -3) win.loadFile(path.join(__dirname, "offline.html"), { query: { u: APP_URL } });
   });
+  win.webContents.on("dom-ready", () => { if (isApp(win.webContents.getURL())) win.webContents.insertCSS(BAR_CSS).catch(() => {}); });
   win.on("close", () => { const b = win.getBounds(); setCfg({ w: b.width, h: b.height }); });
   win.loadURL(APP_URL);
 }
 
+ipcMain.on("lago:theme", (e, dark) => {
+  if (!win || MAC || !isApp(e.senderFrame && e.senderFrame.url)) return;
+  try { win.setTitleBarOverlay({ color: "rgba(0,0,0,0)", symbolColor: dark ? SYMBOL.dark : SYMBOL.light, height: BAR_H }); } catch {}
+});
 ipcMain.on("lago:retry", (e) => { if (win) win.loadURL(APP_URL); });
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -146,6 +168,7 @@ else {
   app.whenReady().then(() => {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: "LAGO", submenu: [{ label: "새로 고침", accelerator: "F5", click: () => win && win.reload() }, { label: "처음 화면", click: () => win && win.loadURL(APP_URL) }, { type: "separator" }, { role: "quit", label: "끝내기" }] },
+      { label: "편집", submenu: [{ role: "undo", label: "되돌리기" }, { role: "redo", label: "다시 하기" }, { type: "separator" }, { role: "cut", label: "잘라내기" }, { role: "copy", label: "복사" }, { role: "paste", label: "붙여넣기" }, { role: "selectAll", label: "모두 선택" }] },
       { label: "보기", submenu: [{ role: "zoomIn", label: "크게" }, { role: "zoomOut", label: "작게" }, { role: "resetZoom", label: "원래 크기" }, { type: "separator" }, { role: "togglefullscreen", label: "전체 화면" }, { role: "toggleDevTools", label: "개발자 도구" }] },
     ]));
     createWindow();

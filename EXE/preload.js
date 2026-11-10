@@ -14,4 +14,12 @@ if (location.origin === ORIGIN) {
     run: (cmd, cwd) => ipcRenderer.invoke("lago:run", String(cmd || ""), String(cwd || "")),
   });
 }
+if (location.origin === ORIGIN) {
+  // 다크 모드가 바뀌면 창 단추 색도 맞춰요
+  const send = () => ipcRenderer.send("lago:theme", document.documentElement.getAttribute("data-lago") === "dark");
+  window.addEventListener("DOMContentLoaded", () => {
+    send();
+    new MutationObserver(send).observe(document.documentElement, { attributes: true, attributeFilter: ["data-lago"] });
+  });
+}
 if (location.protocol === "file:") contextBridge.exposeInMainWorld("lagoRetry", () => ipcRenderer.send("lago:retry"));

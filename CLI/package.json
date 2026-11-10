@@ -1,0 +1,9 @@
+{
+  "name": "lago-cli",
+  "version": "0.2.0",
+  "description": "LAGO AI를 터미널에서 쓰는 CLI",
+  "bin": { "lago": "lago.js" },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED",
+  "private": true
+}

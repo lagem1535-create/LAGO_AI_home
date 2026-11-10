@@ -1,8 +1,8 @@
 {
   "name": "lago-desktop",
   "productName": "LAGO",
-  "version": "0.1.0",
-  "description": "LAGO AI Desktop - 작업 폴더 · 터미널 · 코드 저장이 되는 Windows 앱",
+  "version": "0.2.0",
+  "description": "LAGO AI Desktop - 작업 폴더 · 터미널 · 코드 저장이 되는 Windows · macOS 앱",
   "main": "main.js",
   "author": "LAGO AI",
   "license": "UNLICENSED",
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win nsis portable --publish never",
-    "dist:zip": "electron-builder --win zip --publish never"
+    "dist:mac": "electron-builder --mac dmg --x64 --arm64 --publish never"
   },
   "devDependencies": {
     "electron": "43.8.3",
@@ -34,17 +34,28 @@
         "nsis",
         "portable"
       ],
-      "icon": "build/icon.png",
-      "artifactName": "LAGO-Windows-${version}.${ext}"
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "LAGO",
-      "artifactName": "LAGO-Setup-${version}.exe"
+      "artifactName": "LAGO-Setup.exe"
     },
     "portable": {
-      "artifactName": "LAGO-Portable-${version}.exe"
+      "artifactName": "LAGO-Portable.exe"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "artifactName": "LAGO-Mac-${arch}.${ext}",
+      "identity": "-"
+    },
+    "dmg": {
+      "title": "LAGO"
     }
   },
   "repository": {

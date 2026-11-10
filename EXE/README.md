@@ -1,4 +1,4 @@
-# LAGO Desktop (Windows EXE)
+# LAGO Desktop (Windows · Mac)
 
 LAGO 웹앱(https://lago-ai-home.lagem1535.workers.dev)을 창으로 열고, 웹에서는 못 하는 일을 더해 주는 Windows 앱이에요.
 
@@ -24,10 +24,10 @@ LAGO 웹앱(https://lago-ai-home.lagem1535.workers.dev)을 창으로 열고, 웹
 
 [Releases](https://github.com/lagem1535-create/LAGO_AI_home/releases/latest)에서 받아요.
 
-- `LAGO-Windows-<버전>.zip` — 압축을 풀고 `LAGO.exe`를 실행해요.
-- `LAGO-Setup-<버전>.exe` / `LAGO-Portable-<버전>.exe` — GitHub Actions(`LAGO Desktop EXE`)가 Windows에서 만든 설치 파일이에요.
+- Windows: `LAGO-Setup.exe`(설치) · `LAGO-Portable.exe`(설치 없이)
+- Mac: `LAGO-Mac-arm64.dmg`(Apple Silicon) · `LAGO-Mac-x64.dmg`(Intel)
 
-서명되지 않은 앱이라 처음 실행할 때 Windows SmartScreen이 경고할 수 있어요. **추가 정보 → 실행**을 누르면 돼요.
+서명되지 않은 앱이에요. Windows는 SmartScreen에서 **추가 정보 → 실행**, Mac은 앱을 **우클릭 → 열기**로 처음 한 번 열어요.
 
 ## 직접 빌드하기
 
@@ -35,14 +35,13 @@ LAGO 웹앱(https://lago-ai-home.lagem1535.workers.dev)을 창으로 열고, 웹
 cd EXE
 npm install
 npm start          # 개발용으로 바로 실행
-npm run dist       # Windows에서: 설치 파일(nsis) + 포터블 exe → EXE/dist/
+npm run dist       # Windows에서: 설치 파일 + 포터블 exe → EXE/dist/
+npm run dist:mac   # Mac에서: dmg (arm64 · x64)
 ```
 
 다른 주소(예: 로컬 개발 서버)로 열려면 `LAGO_URL=http://localhost:8787 npm start`.
 
 ## GitHub Actions로 만들기
 
-`.github/workflows/exe.yml`이 `EXE/` 폴더가 바뀐 커밋이 main에 올라오면 Windows에서 EXE를 만들고,
-`desktop-v<버전>` Release에 설치 파일 · 포터블 · zip을 붙여요. 새 버전을 내려면 `package.json`의 `version`을 올려서 커밋하면 돼요.
-
-Actions 탭에서 **Run workflow**로 직접 돌릴 수도 있어요.
+`.github/workflows/apps.yml`이 `EXE/` · `APK/` · `CLI/`가 바뀐 커밋이 main에 올라오면 Windows · Mac · Android · CLI를 모두 만들어
+`app-v<버전>` Release에 붙여요. 새 버전을 내려면 `EXE/package.json`의 `version`을 올려서 커밋하면 돼요.
