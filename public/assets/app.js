@@ -345,6 +345,19 @@ if(r.ok&&r.d.answer)return{html:`<span class="status">${ic(ag.ic||"bot",14)} ${e
 if(r.status===429||r.status===403)return{html:`<p class="answer">${esc(r.d.error||"지금은 답할 수 없어요")}</p>`,plain:r.d.error||"",meta:ag.name};return null;}
 function peekSet(t){document.querySelectorAll("[data-peek]").forEach(e=>{e.innerHTML=t;e.hidden=!t;});}
 function stageSet(t){document.querySelectorAll("[data-think] .tstage").forEach(e=>e.textContent=t);}
+/* ---------- 관리자 슬래시 명령: /mode_change /update /chatdata ---------- */
+const ADMCMD=/^\/(mode_change|update|chatdata)\b/i;
+async function admApi(path,body){const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/admin/"+path,{method:body?"POST":"GET",headers:{authorization:"Bearer "+tk,...(body?{"content-type":"application/json"}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:"no-store"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||("오류 "+r.status));return d;}
+function admModelHtml(d,note){const rows=d.versions.map(v=>`<button class="btn sm" style="justify-content:flex-start;gap:10px;width:100%;${v.active?"border-color:var(--blue)":""}" data-act="admver" data-v="${esc(v.id)}"${v.loaded||v.active?"":""}><b style="font-family:monospace">${v.active?"[V]":"[ ]"}</b> ${esc(v.label)} <span class="muted" style="font-size:12px">${esc(v.note)}${d.server?(v.loaded?" · 서버에 올라와 있어요":" · 서버에 없어요"):""}</span></button>`).join("");
+return `<p class="answer"><b>모델 선택</b> — 누르면 바로 바뀌어요</p><div style="display:grid;gap:8px;max-width:420px;margin:8px 0">${rows}</div><p class="muted" style="font-size:13px">${d.server?"":esc(d.msg||"서버에 연결하지 못했어요")+"<br>"}${note?esc(note)+"<br>":""}새 버전 파일은 태블릿에서 <code>bash ~/lago.sh update</code> 후 /update 를 입력하면 반영돼요.</p>`;}
+async function admCmd(text,am){const cmd=text.trim().toLowerCase().split(/\s+/)[0];const fin=(html,plain)=>{am.loading=false;am.html=html;am.plain=plain||"";am.meta="관리자 명령";save();render();};
+try{
+if(cmd==="/mode_change"){const d=await admApi("model");fin(admModelHtml(d),"모델 선택");}
+else if(cmd==="/update"){const d=await admApi("model",{reload:true});const a=d.versions.find(v=>v.active);fin(`<p class="answer"><b>모델을 다시 불러왔어요</b><br>쓰는 버전: ${esc(a?a.label:d.selected)}<br>서버에 올라온 버전: ${esc(d.versions.filter(v=>v.loaded).map(v=>v.label).join(", ")||"없음")}</p>`,"다시 불러옴");}
+else{const d=await admApi("chatdata?n=20");const kst=t=>new Date(t+9*3600e3).toISOString().slice(5,16).replace("T"," ");
+const rows=d.items.map(x=>`<details style="border-top:1px solid var(--line,#e5e7eb);padding:8px 0"><summary style="cursor:pointer"><span class="muted" style="font-size:12px">${kst(x.t)} · ${(x.ms/1000).toFixed(1)}초 · ${esc(x.ver||"")}${x.news?" · 뉴스":""}</span><br><b>${esc(x.q)}</b></summary><div style="white-space:pre-wrap;margin:6px 0 0;font-size:14px">${esc(x.a)}</div></details>`).join("");
+fin(`<p class="answer"><b>최근 대화 ${d.items.length}개</b> <span class="muted" style="font-size:12px">(질문 · 답 · 걸린 시간, 14일 뒤 지워져요)</span></p>${d.items.length?rows:'<p class="muted">아직 기록이 없어요. 이 기능을 켠 뒤의 대화부터 쌓여요.</p>'}`,"대화 기록");}
+}catch(e){fin(`<p class="answer">명령을 실행하지 못했어요: ${esc(e.message||e)}</p>`,"오류");}}
 async function liveAnswer(q,hist,ctx,mo){try{
 if(S.api.model)fetch("/api/wiki?q="+encodeURIComponent(q)).then(r=>r.json()).then(d=>{if(d&&d.found)peekSet("위키백과에서 찾음: "+d.results.slice(0,3).map(x=>"<b>"+esc(x.title)+"</b>").join(" · ")+"");}).catch(()=>{});
 if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const m=q.match(/(\d{1,2})\s*월/),y=q.match(/(20\d{2})\s*년/);const now=new Date();const yy=y?y[1]:now.getFullYear(),mm=m?m[1]:now.getMonth()+1;
@@ -370,7 +383,7 @@ function send(text,opt){text=text.trim();if(!text)return;const code=S.area==="co
 let c=(route()==="chat"||route()==="code-chat")?curChat():null;
 if(!c){c={id:"c"+Date.now(),folder:S.area==="code"&&WF.name?WF.name:undefined,area:S.area,title:text.slice(0,24),msgs:[],temp:S.temp,created:Date.now(),kid:S.goccia,agent:route()==="agent"?S.curAgent:null};S.chats.unshift(c);S.cur=c.id;}
 c.msgs.push({role:"user",text,att:(opt&&opt.att)||undefined,chip:(opt&&opt.chip)||undefined});const am={id:"m"+Date.now(),role:"assistant",loading:true};c.msgs.push(am);S.menu=false;save();
-go(code?"code-chat":"chat");const useLive=!code&&!!S.api&&!c.agent&&!(opt&&opt.tool)&&!(S.goccia&&(S.study||S.kStudy===true||/죽고싶|자해|괴롭힘|때려|학대|무서워/.test(text.replace(/\s/g,""))));
+go(code?"code-chat":"chat");if(S.isAdmin&&ADMCMD.test(text)){admCmd(text,am);return;}const useLive=!code&&!!S.api&&!c.agent&&!(opt&&opt.tool)&&!(S.goccia&&(S.study||S.kStudy===true||/죽고싶|자해|괴롭힘|때려|학대|무서워/.test(text.replace(/\s/g,""))));
 setTimeout(async()=>{let fctx="";if(opt&&opt.ctxFile){try{fctx=((await readFileText(opt.ctxFile)).text||"").trim();}catch(er){}}const a=(opt&&opt.ctxFile&&!fctx?{html:`<p class="answer">${esc(opt.ctxFile.name||"파일")}에서 글자를 찾지 못했어요. LAGO는 아직 그림 자체는 보지 못하고 글자만 읽어요. 글자가 있는 선명한 사진이나 PDF·Word·텍스트 파일을 올려 주세요.</p>`,plain:"글자 없음",meta:"첨부"}:null)||(opt&&opt.tool?await toolAnswer(opt.tool,opt.raw||text,opt.opt,opt.file,opt.def):null)||(useLive&&await liveAnswer(text,c.msgs.slice(0,-2).filter(m=>!m.loading&&(m.role==="user"?m.text:m.plain)).slice(-4).map(m=>({r:m.role==="user"?"u":"a",t:String(m.role==="user"?m.text:m.plain).slice(0,300)})),fctx))||(fctx?{html:`<p class="answer">${esc((opt.ctxFile.name||"파일")+"에서 글자를 "+fctx.length.toLocaleString()+"자 읽었어요.")} 모델 서버가 꺼져 있어서 이 글로 답하지 못했어요. ‘문서 요약’이나 ‘텍스트 추출’ 도구는 지금도 쓸 수 있어요.</p>`,plain:"첨부 글을 읽었어요",meta:"첨부"}:null)||(!code&&c.agent&&modelOn()&&await agentLive(text,agentById(c.agent)))||(code?await codeLive(text,histOf(c)):answerFor(text,c.agent&&agentById(c.agent)));Object.assign(am,a,{loading:false});if(a&&a.plain&&!/^(실패|모델 꺼짐|글자 없음|찾지 못함)$/.test(a.plain))useAdd(code?modeOf(S.cmode).lab:opt&&opt.tool?"TOOLS":c.agent?"MODE":modeOf(S.mode).lab,text,a.plain);if(a.preview)S.preview=true;save();if(S.cur===c.id)render();},useLive||code?200:900);}
 
 /* ---------- projects ---------- */
@@ -906,6 +919,7 @@ if(d.plan){S.user.plan=d.plan;if(S.user.uid)fbSave(true);else store.set("lago_se
 if(d.sw){const k=d.sw;S[k]=k==="kStudy"?S[k]!==true:!(S[k]!==false);if(k==="learn"||k==="learnImg"){toast(S[k]?"켰어요":"껐어요. 이제부터의 대화는 학습에 쓰지 않아요.");}save();render();return;}
 if(d.todo!=null&&t.tagName==="INPUT")return;
 switch(d.act){
+case"admver":{const el=t.closest("[data-v]");const v=el&&el.dataset.v;if(!v||!S.isAdmin)break;el.disabled=true;admApi("model",{version:v}).then(d=>{const m=S.chats.flatMap(c=>c.msgs).find(x=>x.html&&x.html.includes("data-act=\"admver\""));if(m){m.html=admModelHtml(d,"바꿨어요: "+(d.versions.find(x=>x.active)||{}).label);}render();}).catch(e=>{el.disabled=false;toast("바꾸지 못했어요: "+(e.message||e));});break;}
 case"replay":brandStage&&brandStage.play();break;
 case"demo":S.user={...DEMO};store.set("lago_session",S.user);loadUser();toast("예시 계정으로 들어왔어요");go("home");break;
 case"google":{const bl=fbBlock();if(bl){const m=$("#lerr")||$("#jerr");if(m)m.textContent=bl;else toast(bl);break;}}if(S.fb){try{await S.fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){const m=$("#lerr")||$("#jerr");if(m)m.textContent=fbMsg(e);else toast(fbMsg(e));}break;}toast("Google 로그인은 실제 서비스에서 연결돼요. 지금은 예시 계정으로 들어갈게요.");S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");break;
@@ -1278,7 +1292,7 @@ S.sideOff=store.get("lago_sideoff",false)===true;{const _r=render;render=functio
 async function meCheck(){if(!S.fb||!S.user||!S.user.uid||!S.api)return;
 try{const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/me",{headers:{authorization:"Bearer "+tk},cache:"no-store"});if(!r.ok)return;const m=await r.json();
 const before=JSON.stringify([S.banned,S.user.plan,S.user.dailyLimit]);
-S.banned=m.banned?{until:m.until||0,reason:m.reason||""}:null;S.user.plan=m.plan||"Free";S.user.dailyLimit=m.dailyLimit||0;syncTasks();
+S.banned=m.banned?{until:m.until||0,reason:m.reason||""}:null;S.isAdmin=!!m.admin;S.user.plan=m.plan||"Free";S.user.dailyLimit=m.dailyLimit||0;syncTasks();
 if(before!==JSON.stringify([S.banned,S.user.plan,S.user.dailyLimit]))render();}
 catch(e){if(e&&/user-disabled|user-token-expired/.test(e.code||"")){S.fb.auth.signOut();toast("이용이 정지된 계정이에요");}}}
 setInterval(()=>document.querySelectorAll("[data-think]").forEach(e=>{const t0=+e.dataset.t0||(e.dataset.t0=Date.now(),+e.dataset.t0),sec=Math.floor((Date.now()-t0)/1000);e.querySelector(".tsec").textContent=sec>=2?sec+"초":"";}),700);
