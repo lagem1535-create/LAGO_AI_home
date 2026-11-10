@@ -22,7 +22,7 @@ LAGO 웹앱(https://lago-ai-home.lagem1535.workers.dev)을 창으로 열고, 웹
 
 ## 받기
 
-[Releases](https://github.com/lagem1535-create/lago_ai_home/releases/latest)에서 받아요.
+[Releases](https://github.com/lagem1535-create/LAGO_AI_home/releases/latest)에서 받아요.
 
 - `LAGO-Windows-<버전>.zip` — 압축을 풀고 `LAGO.exe`를 실행해요.
 - `LAGO-Setup-<버전>.exe` / `LAGO-Portable-<버전>.exe` — GitHub Actions(`LAGO Desktop EXE`)가 Windows에서 만든 설치 파일이에요.
