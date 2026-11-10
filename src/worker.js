@@ -146,6 +146,19 @@ function htmlPage(body) {
   return new Response(body, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
     "content-security-policy": "sandbox allow-scripts allow-forms allow-popups allow-modals; default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: blob: https:; media-src data: blob: https:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" } });
 }
+
+// 공지 + 최신 앱 버전. 공지는 KV(config:notice)에 있으면 그걸, 없으면 아래 기본 공지를 보여줘요.
+const NOTICE_DEFAULT = { id: "20261110", title: "LAGO 앱이 새로워졌어요", body: "· 창 위쪽 띠를 깔끔하게 다듬었어요.\n· 계정 메뉴 ‘앱 받기’에서 Windows · Mac · Android · 터미널(lago)을 받을 수 있어요.\n· 화면과 모델은 다시 켜기만 하면 바뀌고, 앱 껍데기가 바뀔 때만 새로 받으면 돼요.\n· 사이트를 홈 화면에 추가하면 다른 기기에서도 앱처럼 써요." };
+async function updateInfo(env, ctx) {
+  let notice = NOTICE_DEFAULT;
+  try { const o = env.ADMIN_KV && await env.ADMIN_KV.get("config:notice"); if (o) { const j = JSON.parse(o); if (j && j.title) notice = { id: String(j.id || "n"), title: String(j.title).slice(0, 80), body: String(j.body || "").slice(0, 1500) }; } } catch {}
+  const out = { notice, latest: "", notes: "", url: "https://github.com/lagem1535-create/LAGO_AI_home/releases/latest" };
+  try {
+    const r = await fetch("https://api.github.com/repos/lagem1535-create/LAGO_AI_home/releases/latest", { headers: { "user-agent": "lago-ai", accept: "application/vnd.github+json" }, cf: { cacheTtl: 300, cacheEverything: true } });
+    if (r.ok) { const j = await r.json(); const m = /^app-v(\d+\.\d+\.\d+)/.exec(String(j.tag_name || "")); if (m) { out.latest = m[1]; out.notes = String(j.body || "").slice(0, 800); } }
+  } catch {}
+  return out;
+}
 const isDev = async (env, uid) => !!(uid && env.ADMIN_KV && (await env.ADMIN_KV.get("dev:" + uid)));
 async function shareTools(req, env, url, ctx, p) {
   const post = req.method === "POST";
@@ -1257,6 +1270,14 @@ async function adminApi(req, env, ctx, url, raw) {
       return json({ ok: r.ok, status: r.status, sample });
     } catch (e) { return json({ error: "연결하지 못했어요: " + String(e.message || e) }, 502); }
   }
+  if (p === "/api/admin/notice") {
+    if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
+    const t = String(b.title || "").trim().slice(0, 80), body = String(b.body || "").trim().slice(0, 1500);
+    if (!t) { await env.ADMIN_KV.delete("config:notice"); return json({ ok: true, cleared: true }); }
+    const n = { id: Date.now().toString(36), title: t, body };
+    await env.ADMIN_KV.put("config:notice", JSON.stringify(n));
+    return json({ ok: true, notice: n });
+  }
   if (p === "/api/admin/llama" || p === "/api/admin/llama/test") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
     if (p === "/api/admin/llama") {
@@ -1335,6 +1356,7 @@ export default {
       if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/notify") return req.method === "POST" ? (bump(env, ctx, "notify"), await notify(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (req.method !== "GET") return json({ error: "GET만 돼요" }, 405);
+      if (p === "/api/update") return json(await updateInfo(env, ctx), 200, { "cache-control": "public, max-age=120" });
       if (p === "/api/config") {
         bump(env, ctx, "visits");
         return json({

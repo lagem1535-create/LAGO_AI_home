@@ -138,7 +138,7 @@ function flyPrev(t){const pin=S.pinTools.includes(t.id);return `<div class="flya
 function flyout(){const cur=TOOLS.find(t=>t.id===S.flyTool)||TOOLS[0];
 return `<div class="flywrap" data-act="flyout"></div><div class="flyout ${S.sideOff?"atrail":""}" role="dialog" aria-label="TOOLS"><div class="flylist">${TOOLS.map(t=>`<button class="flyitem ${t.id===cur.id?"on":""}" data-tool="${t.id}" data-go="${t.route}"><span class="fi">${ic(t.ic,19)}</span><span class="grow"><b>${t.lab}</b><small>${t.d}</small></span>${S.pinTools.includes(t.id)?ic("pin",14):""}</button>`).join("")}${(S.myTools||[]).map(t=>`<button class="flyitem" data-ctool="${t.id}"><span class="fi" style="background:#4A5FA8;color:#fff">${ic("bot",19)}</span><span class="grow"><b>${esc(t.name)}</b><small>내 도구 · ${esc(t.desc||"")}</small></span></button>`).join("")}<button class="flyitem" data-act="newTool"><span class="fi">${ic("plus",19)}</span><span class="grow"><b>TOOLS 만들기</b><small>내 지시문으로 나만의 도구를 만들고 배포해요</small></span></button><button class="flyitem" data-go="tools"><span class="fi">${ic("grid",19)}</span><span class="grow"><b>도구 모두 보기</b></span></button></div><div class="flyprev">${flyPrev(cur)}</div></div>`;}
 function railBar(){const code=S.area==="code",kid=S.goccia,r=route();const b=(k,act,t,on)=>`<button class="railbtn ${on?"on":""}" ${act} aria-label="${t}" title="${t}">${ic(k,20)}</button>`;
-return `<nav class="rail" aria-label="빠른 메뉴">${b("panel",'data-act="sideToggle"',"사이드바 열기 (Ctrl B)")}<div class="railsep"></div>${b("pen",'data-act="new"',"새 대화 (Ctrl K)")}${b("search",'data-act="search"',"검색")}${code?b("folder",'data-go="code-folder"',"작업 폴더",r==="code-folder")+b("term",'data-act="term"',"터미널"):kid?b("grid",'data-go="tools"',"TOOLS / MODES",HUB.includes(r)):b("folder",'data-go="projects"',"프로젝트",r==="projects"||r==="project")+b("clock",'data-go="tasks"',"예약 작업",r==="tasks")+b("plug",'data-go="services"',"서비스 연결",r==="services")+b("grid",'data-go="tools"',"TOOLS / MODES",HUB.includes(r))+S.pinTools.map(id=>{const t=TOOLS.find(x=>x.id===id);return t?b(t.ic,`data-go="${t.route}"`,t.lab,r===t.route):""}).join("")}<span class="grow"></span><button class="railbtn av" data-act="acct" aria-label="계정 메뉴" ${kid?'style="background:var(--k);color:#fff"':""}>${esc(me().name.slice(0,1))}${!kid&&pendingReq()?'<i class="dot"></i>':""}</button></nav>`;}
+return `<nav class="rail" aria-label="빠른 메뉴">${b("panel",'data-act="sideToggle"',"사이드바 열기 (Ctrl B)")}<div class="railsep"></div>${b("pen",'data-act="new"',"새 대화 (Ctrl K)")}${b("search",'data-act="search"',"검색")}${code?b("folder",'data-go="code-folder"',"작업 폴더",r==="code-folder")+b("term",'data-act="term"',"터미널"):kid?b("grid",'data-go="tools"',"TOOLS / MODES",HUB.includes(r)):b("folder",'data-go="projects"',"프로젝트",r==="projects"||r==="project")+b("clock",'data-go="tasks"',"예약 작업",r==="tasks")+b("plug",'data-go="services"',"서비스 연결",r==="services")+b("grid",'data-go="tools"',"TOOLS / MODES",HUB.includes(r))+S.pinTools.map(id=>{const t=TOOLS.find(x=>x.id===id);return t?b(t.ic,`data-go="${t.route}"`,t.lab,r===t.route):""}).join("")}<span class="grow"></span>${kid?"":`<button class="railbtn" data-act="notice" aria-label="업데이트 · 공지" title="업데이트 · 공지">${ic("bell",19)}${updDot()?'<i class="dot"></i>':""}</button>`}<button class="railbtn av" data-act="acct" aria-label="계정 메뉴" ${kid?'style="background:var(--k);color:#fff"':""}>${esc(me().name.slice(0,1))}${!kid&&pendingReq()?'<i class="dot"></i>':""}</button></nav>`;}
 function sidebar(){const code=S.area==="code";const r=route();const kid=S.goccia;
 const list=S.chats.filter(c=>c.area===S.area&&!c.temp&&!!c.kid===kid);
 const pinnedChats=list.filter(c=>c.pin),rest=list.filter(c=>!c.pin);
@@ -157,7 +157,7 @@ ${temps.length?`<div class="sect row" style="gap:6px">${ic("eyeoff",13)} 임시 
 <div class="sect">최근 ${code?"작업":"대화"}</div>
 <div class="recent">${pinProj.map(p=>`<div class="itemrow ${r==="project"&&S.curProject===p.id?"on":""}"><button class="item" data-project="${p.id}">${ic("folder",14)} ${esc(p.name)}</button><button class="more" data-unpin="${p.id}" aria-label="고정 해제" title="고정 해제">${ic("pin",14)}</button></div>`).join("")}${pinnedChats.map(row).join("")}${rest.slice(0,150).map(row).join("")}${!list.length&&!pinProj.length?`<p class="empty">아직 ${code?"코드 작업이":"대화가"} 없어요.<br>${code?"새 코드 작업":"새 대화"}로 시작해 보세요.</p>`:""}</div>
 <div class="sidefoot">
-<div class="prof"><span class="av" ${kid?'style="background:var(--k);color:#fff"':""}>${esc(me().name.slice(0,1))}${!kid&&pendingReq()?'<i class="dot"></i>':""}</span><span class="grow"><b>${esc(me().name)}</b><small>${kid?"Goccia · 보호자와 연결됨":esc(S.user.plan||"Free")}</small></span><button class="iconbtn" data-act="acct" aria-expanded="${S.acct}" aria-label="계정 메뉴">${ic("dots",18)}</button></div></div></aside>${railBar()}${S.acct?acctMenu():""}${""}`;}
+${S.goccia?"":updBtn()}<div class="prof"><span class="av" ${kid?'style="background:var(--k);color:#fff"':""}>${esc(me().name.slice(0,1))}${!kid&&pendingReq()?'<i class="dot"></i>':""}</span><span class="grow"><b>${esc(me().name)}</b><small>${kid?"Goccia · 보호자와 연결됨":esc(S.user.plan||"Free")}</small></span><button class="iconbtn" data-act="acct" aria-expanded="${S.acct}" aria-label="계정 메뉴">${ic("dots",18)}</button></div></div></aside>${railBar()}${S.acct?acctMenu():""}${""}`;}
 function usagePct(){const lim=(S.user&&S.user.dailyLimit)||LIMITS[(S.user&&S.user.plan)||"Free"]||80000;return Math.min(100,Math.round(useDay(dayKey()).t/lim*100));}
 function chatMenu(c){return `<div class="cmenu" role="menu"><button class="opt" data-act="cRename" data-id="${c.id}">${ic("pen",15)} 이름 바꾸기</button><button class="opt" data-act="cPin" data-id="${c.id}">${ic("pin",15)} ${c.pin?"고정 해제":"고정하기"}</button>${S.goccia?"":`<button class="opt" data-act="share" data-id="${c.id}">${ic("share",15)} 공유</button>`}<button class="opt danger-t" data-act="cDel" data-id="${c.id}">${ic("trash",15)} 삭제</button></div>`;}
 function delConfirm(c){return `<div class="confirm" style="margin:4px 4px 8px">"${esc(c.title)}"을(를) 지울까요?<div class="row"><button class="btn sm danger" data-act="cDelYes" data-id="${c.id}">지우기</button><button class="btn sm" data-act="cDelNo">취소</button></div></div>`;}
@@ -210,7 +210,9 @@ return `<header class="top"><button class="iconbtn menu-btn" data-act="drawer" a
 function shell(inner){const r=route();const tempOn=S.temp&&["home","chat","code","code-chat","agent"].includes(r);
 if(S.temp&&S.ttl){const lim=S.ttl===1?36e5:864e5;S.chats=S.chats.filter(c=>!c.temp||Date.now()-c.created<lim);}
 const saveM=S.saveCode&&DESK?`<div class="tempask" role="dialog" aria-label="파일로 저장"><form class="card" id="saveForm" style="display:grid;gap:12px;max-width:420px;width:100%" novalidate><b style="font-size:16px">코드를 파일로 저장</b><span class="muted" style="font-size:13px">${WF.name?esc(WF.name)+(WF.cwd?"/"+esc(WF.cwd):"")+" 폴더에 저장해요. 같은 이름이 있으면 확인 창에서 덮어쓸지 물어봐요.":"먼저 작업 폴더를 열어 주세요."}</span><input id="scname" placeholder="예: app.py" maxlength="120" aria-label="파일 이름" ${WF.name?"":"disabled"}><p class="err" id="scerr" role="alert"></p><div class="row" style="justify-content:flex-end;gap:8px"><button type="button" class="btn" data-act="saveX">취소</button><button class="btn pri" ${WF.name?"":"disabled"}>저장</button></div></form></div>`:"";
-return saveM+`<div class="shell ${S.sideOff?"sideoff":""} ${S.area==="code"?"code":""} ${S.goccia?"goccia":""} ${S.drawer?"drawer":""}">${sidebar()}<div class="overlay" data-act="drawer"></div><div class="main ${tempOn?"temp":""}">${tempOn?tempBar():""}${inner}</div></div>`;}
+if(!S.noticeAsked&&S.upd&&noticeUnseen()&&!S.goccia&&["home","chat","code","code-chat"].includes(r)){S.noticeAsked=true;S.noticeOpen=true;}
+const upM=S.noticeOpen&&S.upd?noticeModal():"";
+return saveM+upM+`<div class="shell ${S.sideOff?"sideoff":""} ${S.area==="code"?"code":""} ${S.goccia?"goccia":""} ${S.drawer?"drawer":""}">${sidebar()}<div class="overlay" data-act="drawer"></div><div class="main ${tempOn?"temp":""}">${tempOn?tempBar():""}${inner}</div></div>`;}
 function discText(code){return S.goccia?`${ic("info",13)} 보호자와 연결된 계정이에요 · 오늘 ${48+S.extra}분 남았어요`:code?"실행 전에 명령을 꼭 확인해 주세요.":"LAGO는 실수할 수 있어요. 중요한 내용은 출처를 확인해 주세요.";}
 /* ---------- composer ---------- */
 function composer(ph){const code=S.area==="code";const modes=code?CODE_MODES:TALK_MODES;const cur=code?S.cmode:S.mode;const cm=modeOf(cur);
@@ -939,6 +941,10 @@ case"temp":{if(S.temp&&S.chats.some(c=>c.temp)){S.tempAsk=true;render();break;}S
  else{toast("임시 대화를 켰어요. 기록에 남지 않고 학습에도 쓰지 않아요.");if(inChat){S.cur=null;go(S.area==="code"?"code":"home");break;}}
  render();break;}
 case"acct":S.acct=!S.acct;render();break;
+case"notice":S.acct=false;S.noticeOpen=true;if(!S.upd)loadUpd();render();break;
+case"noticeX":noticeClose();break;
+case"reloadNow":try{noticeClose();}catch(e){}location.reload();break;
+case"getNew":S.noticeOpen=false;if(S.upd&&S.upd.notice)store.set("lago_notice",S.upd.notice.id);go("apps");break;
 case"tempEnd":if(S.chats.some(c=>c.temp)){S.tempAsk=true;render();}else{S.temp=false;S.cur=null;toast("임시 대화를 끝냈어요");go(S.area==="code"?"code":"home");}break;
 case"tempAskNo":S.tempAsk=false;render();break;
 case"tempEndYes":S.tempAsk=false;S.temp=false;S.chats=S.chats.filter(c=>!c.temp);S.cur=null;toast("임시 대화를 지우고 끝냈어요");go(S.area==="code"?"code":"home");break;
@@ -1200,6 +1206,23 @@ ${card("monitor","Mac",DESK&&DESK.platform==="darwin",`<span class="muted" style
 ${card("monitor","Android (APK)",IN_APK,`<span class="muted" style="font-size:13px">폰 · 태블릿에 까는 앱이에요.</span><div class="row" style="gap:8px;flex-wrap:wrap">${dl("LAGO-Android.apk","APK 받기")}</div><span class="muted" style="font-size:12px">받은 파일을 열고 ‘출처를 알 수 없는 앱 설치’를 허용해요.</span>`)}
 ${card("term","터미널 (CLI)",false,`<span class="muted" style="font-size:13px">CMD · PowerShell · 맥 터미널에서 <b>lago</b> 명령으로 써요.</span><div class="row" style="gap:8px;flex-wrap:wrap">${dl("lago.exe","Windows용 lago.exe")}${dl("lago-cli.zip","lago-cli.zip","Node 18+")}</div>${cmd('lago login\nlago "독도는 어디에 있어?"\nlago code "app.py 버그 고쳐 줘"')}<span class="muted" style="font-size:12px">Google로 가입했다면 아래 연결 코드를 복사해 <b>lago login --code</b> 뒤에 붙여요. 이 코드는 비밀번호와 같으니 남에게 보여 주지 마세요.</span><div><button class="btn sm" data-act="cliCode">${ic("copy",14)} 연결 코드 복사</button></div>`)}
 </div></div></div>`);}
+/* ---------- update + notice ---------- */
+function vNum(v){return String(v||"").split(".").map(x=>parseInt(x,10)||0);}
+function vNewer(a,b){const x=vNum(a),y=vNum(b);for(let i=0;i<3;i++){if((x[i]||0)!==(y[i]||0))return(x[i]||0)>(y[i]||0);}return false;}
+function updNewApp(){return !!(DESK&&S.upd&&S.upd.latest&&vNewer(S.upd.latest,DESK.version||"0.0.0"));}
+function noticeUnseen(){return !!(S.upd&&S.upd.notice&&store.get("lago_notice","")!==S.upd.notice.id);}
+function updDot(){return noticeUnseen()||updNewApp();}
+async function loadUpd(){if(!/^https?:$/.test(location.protocol))return;try{const r=await fetch("/api/update",{cache:"no-store"});if(!r.ok)return;S.upd=await r.json();}catch(e){return;}
+ render();}
+function noticeClose(){S.noticeOpen=false;if(S.upd&&S.upd.notice)store.set("lago_notice",S.upd.notice.id);render();}
+function noticeModal(){const u=S.upd||{},n=u.notice||{};const cur=DESK?("v"+(DESK.version||"")):(IN_APK?"Android 앱":"웹");const nw=updNewApp();
+const lines=String(n.body||"").split("\n").filter(Boolean).map(x=>`<p style="margin:0 0 6px">${esc(x)}</p>`).join("");
+return `<div class="tempask" role="dialog" aria-label="업데이트 · 공지"><div class="noticebg" data-act="noticeX"></div><div class="card noticecard"><div class="row" style="gap:8px"><span class="noticeic">${ic("bell",18)}</span><b style="font-size:16px" class="grow">${esc(n.title||"공지")}</b><button class="iconbtn" data-act="noticeX" aria-label="닫기">${ic("x",16)}</button></div>
+<div class="noticebody">${lines||'<p class="muted" style="margin:0">새 공지가 없어요.</p>'}</div>
+<div class="noticever"><span>지금 쓰는 버전</span><b>${esc(cur)}</b>${u.latest?`<span>최신 앱</span><b>v${esc(u.latest)}</b>`:""}</div>
+${nw?`<p class="noticenew">새 앱 v${esc(u.latest)} 이(가) 나왔어요. 받아서 설치하면 업데이트돼요.</p>`:`<p class="muted" style="font-size:12.5px;margin:0">${DESK||IN_APK?"앱 화면은 다시 켜면 최신으로 바뀌어요.":"새로 고치면 최신 화면으로 바뀌어요."}</p>`}
+<div class="row" style="gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" data-act="noticeX">닫기</button><button class="btn ${nw?"":"pri"}" data-act="reloadNow">${ic("refresh",14)} 지금 새로 고침</button>${nw||(!DESK&&!IN_APK)?`<button class="btn ${nw?"pri":""}" data-act="getNew">${ic("download",14)} 앱 받기</button>`:""}</div></div></div>`;}
+function updBtn(){return `<button class="updbtn" data-act="notice" title="업데이트 · 공지">${ic("bell",15)}<span class="grow">업데이트 · 공지</span>${updDot()?'<i class="newdot"></i>':""}</button>`;}
 /* ---------- boot ---------- */
 initSet();applySet();S.theme=store.get("lago_theme","light");S.lang=store.get("lago_lang","ko");applyTheme();document.documentElement.setAttribute("lang",S.lang);try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(S.theme==="system")applyTheme();});}catch(e){}
 S.sideOff=store.get("lago_sideoff",false)===true;{const _r=render;render=function(){_r();fixPops();trUI();};}
@@ -1218,5 +1241,5 @@ return `<main style="min-height:100dvh;display:grid;place-items:center;padding:2
 Object.assign(window,{S,shell,topbar,esc,toast,go,route,WM});window.render=()=>render();
 if(DESK&&DESK.current)DESK.current().then(async r=>{if(r&&r.name){WF.name=r.name;WF.path=r.path;try{WF.files=await DESK.list();wfSort();}catch(e){}render();}}).catch(()=>{});
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();S.pwa=e;if(route()==="apps")render();});
-loadUser();S.booting=!S.user&&/^https?:$/.test(location.protocol)&&!!store.get("lago_fbhint",0);render();loadApi().finally(()=>{if(!(S.api&&S.api.firebase&&S.api.firebase.apiKey))bootDone();});setTimeout(bootDone,8000);
+loadUser();S.booting=!S.user&&/^https?:$/.test(location.protocol)&&!!store.get("lago_fbhint",0);render();loadUpd();loadApi().finally(()=>{if(!(S.api&&S.api.firebase&&S.api.firebase.apiKey))bootDone();});setTimeout(bootDone,8000);
 })();
