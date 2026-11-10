@@ -7,7 +7,7 @@ const path = require("path");
 const readline = require("readline");
 const { spawn } = require("child_process");
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 const BASE = (process.env.LAGO_URL || "https://lago-ai-home.lagem1535.workers.dev").replace(/\/+$/, "");
 const DIR = path.join(os.homedir(), ".lago");
 const CFG = path.join(DIR, "config.json");
@@ -28,6 +28,7 @@ const HELP = `${bold(blue("LA") + green("GO"))} CLI ${VERSION}
   lago login                이메일 · 비밀번호로 로그인
   lago login --code 코드    LAGO 사이트 ‘앱 받기’에서 복사한 연결 코드로 로그인 (Google 계정)
   lago logout / lago whoami / lago --version
+  lago uninstall            LAGO CLI 지우기 (로그인 정보 · 설치 파일 · PATH까지)  -y 로 묻지 않고 지우기
 
 대화 중 명령
   /code  /talk              코드 모드 · 대화 모드 바꾸기
@@ -209,12 +210,40 @@ async function slash(line, st, rl) {
   }
 }
 
+
+// 시작 화면: 큰 LAGO 글자(파랑 → 초록)와 짧은 상태 안내
+const LOGO = [
+  "██╗      █████╗  ██████╗  ██████╗ ",
+  "██║     ██╔══██╗██╔════╝ ██╔═══██╗",
+  "██║     ███████║██║  ███╗██║   ██║",
+  "██║     ██╔══██║██║   ██║██║   ██║",
+  "███████╗██║  ██║╚██████╔╝╚██████╔╝",
+  "╚══════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ",
+];
+const mix = (a, b, t) => Math.round(a + (b - a) * t);
+function logoLine(row) {
+  const n = row.length;
+  return [...row].map((ch, i) => (ch === " " ? ch : c(`38;2;${mix(37, 22, i / (n - 1))};${mix(99, 163, i / (n - 1))};${mix(235, 74, i / (n - 1))}`, ch))).join("");
+}
+function banner(cfg, st) {
+  const cols = process.stdout.columns || 80;
+  if (!TTY || cols < 42) { console.log(bold(blue("LA") + green("GO")) + dim(` CLI ${VERSION} · ${cfg.email || "로그인 안 함 (lago login)"} · /help · /exit`)); return; }
+  console.log();
+  for (const row of LOGO) console.log("  " + logoLine(row));
+  console.log();
+  console.log("  " + bold("LAGO CLI") + dim(` v${VERSION}   대화 · 코드 · 위키`));
+  console.log("  " + dim("─".repeat(Math.min(46, cols - 4))));
+  console.log("  " + dim("계정  ") + (cfg.email ? cfg.email : "로그인 안 함 " + dim("→ lago login")));
+  console.log("  " + dim("폴더  ") + process.cwd());
+  console.log("  " + dim("모드  ") + (st.code ? green("코드") : blue("대화")) + dim("    /help 도움말   /code 코드 모드   /exit 끝내기"));
+  console.log();
+}
+
 async function repl(st) {
   const cfg = loadCfg();
-  console.log(bold(blue("LA") + green("GO")) + dim(` CLI ${VERSION} · ${cfg.email || "로그인 안 함 (lago login)"} · /help 도움말 · /exit 끝내기`));
-  if (st.code) console.log(green("코드 모드") + dim(" · 폴더: " + process.cwd()));
+  banner(cfg, st);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const prompt = () => rl.setPrompt(st.code ? green("code › ") : blue("lago › "));
+  const prompt = () => rl.setPrompt(st.code ? green("code ❯ ") : blue("lago ❯ "));
   prompt(); rl.prompt();
   let busy = Promise.resolve();
   rl.on("line", (line) => {
@@ -231,6 +260,39 @@ async function repl(st) {
   });
   await new Promise((res) => rl.on("close", res));
   await busy.catch(() => {});
+}
+
+
+// lago uninstall: 로그인 정보 · 설치 파일 · PATH 를 한 번에 지워요
+async function uninstall(args) {
+  const yes = args.includes("-y") || args.includes("--yes");
+  const win = process.platform === "win32";
+  const exeIsLago = /^lago(\.exe)?$/i.test(path.basename(process.execPath));
+  const sc = process.argv[1] && /lago(\.js)?$/i.test(process.argv[1]) && fs.existsSync(process.argv[1]) ? path.resolve(process.argv[1]) : "";
+  const self = exeIsLago ? process.execPath : sc;
+  const dest = win ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "LAGO", "cli") : "";
+  const bin = win ? "" : path.join(os.homedir(), ".local", "bin", "lago");
+  // 설치해서 쓰는 사본만 지워요. 압축을 푼 폴더의 원본 파일(install 파일과 같이 있는 것)은 그대로 둬요.
+  const installed = !!self && (win ? (self.toLowerCase().startsWith(dest.toLowerCase()) || exeIsLago) : self === bin);
+  const list = [fs.existsSync(DIR) && DIR + "  (로그인 정보)", installed && self, win && fs.existsSync(dest) && dest + "  (설치 폴더)", !win && fs.existsSync(bin) && bin].filter(Boolean);
+  console.log(bold("LAGO CLI를 지워요") + dim("\n  지울 것: ") + (list.length ? "\n    " + [...new Set(list)].join("\n    ") : "없어요"));
+  if (!yes) {
+    if (!process.stdin.isTTY) return console.log(red("묻지 않고 지우려면  lago uninstall -y  를 입력하세요."));
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const ans = await new Promise((r) => rl.question("\n정말 지울까요? (y/N) ", r)); rl.close();
+    if (!/^y(es)?$/i.test(ans.trim())) return console.log("그대로 둘게요.");
+  }
+  try { fs.rmSync(DIR, { recursive: true, force: true }); } catch {}
+  if (win) {
+    try { require("child_process").spawnSync("powershell", ["-NoProfile", "-Command", "$d=$env:LOCALAPPDATA+'\\LAGO\\cli';$p=[Environment]::GetEnvironmentVariable('Path','User');if($p){[Environment]::SetEnvironmentVariable('Path',((($p -split ';')|Where-Object{$_ -and $_ -ne $d}) -join ';'),'User')}"], { stdio: "ignore" }); } catch {}
+    try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
+    // 실행 중인 파일은 지금 못 지워서, 이 창이 닫힌 뒤 지워요
+    const cmds = [installed && `del /f /q "${self}"`, `if exist "${dest}" rmdir /s /q "${dest}"`].filter(Boolean).join(" & ");
+    try { spawn("cmd.exe", ["/c", `ping -n 3 127.0.0.1 >nul & ${cmds}`], { detached: true, stdio: "ignore", windowsHide: true, windowsVerbatimArguments: true }).unref(); } catch {}
+  } else {
+    try { fs.rmSync(bin, { force: true }); } catch {}
+  }
+  console.log(green("지웠어요.") + dim(win ? " 이 창을 닫으면 lago 파일도 사라져요. (새 CMD 창부터 lago 명령이 없어져요)" : " 새 터미널부터 lago 명령이 없어져요."));
 }
 
 async function readPipe() {
@@ -256,6 +318,7 @@ async function main() {
   const a0 = args[0];
   if (a0 === "--help" || a0 === "-h" || a0 === "help") return console.log(HELP);
   if (a0 === "--version" || a0 === "-v") return console.log(VERSION);
+  if (a0 === "uninstall" || a0 === "remove") return uninstall(args.slice(1));
   if (a0 === "login") return login(args.slice(1));
   if (a0 === "logout") { const cfg = loadCfg(); saveCfg({ apiKey: cfg.apiKey }); return console.log("로그아웃했어요."); }
   if (a0 === "whoami") { const cfg = loadCfg(); return console.log(cfg.email ? cfg.email : "로그인하지 않았어요. (lago login)"); }

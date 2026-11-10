@@ -158,6 +158,22 @@ ipcMain.on("lago:theme", (e, dark) => {
   if (!win || MAC || !isApp(e.senderFrame && e.senderFrame.url)) return;
   try { win.setTitleBarOverlay({ color: "rgba(0,0,0,0)", symbolColor: dark ? SYMBOL.dark : SYMBOL.light, height: BAR_H }); } catch {}
 });
+
+// 앱 지우기를 쉽게: 설치 종류에 맞는 화면을 바로 열어 줘요
+async function uninstallHelp() {
+  const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (MAC) {
+    const r = await dialog.showMessageBox(win, { type: "question", buttons: ["Applications 폴더 보기", "취소"], defaultId: 0, cancelId: 1, title: "LAGO 지우기", message: "LAGO를 지울까요?", detail: "열리는 폴더에서 LAGO를 휴지통으로 끌어다 놓으면 돼요." });
+    if (r.response === 0) shell.showItemInFolder(app.getPath("exe"));
+  } else if (portable) {
+    const r = await dialog.showMessageBox(win, { type: "question", buttons: ["파일 위치 열기", "취소"], defaultId: 0, cancelId: 1, title: "LAGO 지우기", message: "포터블 버전은 설치되지 않아요", detail: "열리는 폴더에서 LAGO-Portable.exe 파일을 지우면 끝이에요. (저장된 설정은 앱 데이터 폴더에 조금 남아 있어요)" });
+    if (r.response === 0) shell.showItemInFolder(portable);
+  } else {
+    const r = await dialog.showMessageBox(win, { type: "question", buttons: ["설치된 앱 열기", "취소"], defaultId: 0, cancelId: 1, title: "LAGO 지우기", message: "LAGO를 지울까요?", detail: "Windows ‘설치된 앱’ 화면이 열려요. 목록에서 LAGO를 찾아 ⋯ → 제거를 누르세요." });
+    if (r.response === 0) shell.openExternal("ms-settings:appsfeatures");
+  }
+}
+
 ipcMain.on("lago:retry", (e) => { if (win) win.loadURL(APP_URL); });
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -165,7 +181,7 @@ else {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.whenReady().then(() => {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: "LAGO", submenu: [{ label: "새로 고침", accelerator: "F5", click: () => win && win.reload() }, { label: "처음 화면", click: () => win && win.loadURL(APP_URL) }, { type: "separator" }, { role: "quit", label: "끝내기" }] },
+      { label: "LAGO", submenu: [{ label: "새로 고침", accelerator: "F5", click: () => win && win.reload() }, { label: "처음 화면", click: () => win && win.loadURL(APP_URL) }, { label: "LAGO 지우기…", click: () => uninstallHelp() }, { type: "separator" }, { role: "quit", label: "끝내기" }] },
       { label: "편집", submenu: [{ role: "undo", label: "되돌리기" }, { role: "redo", label: "다시 하기" }, { type: "separator" }, { role: "cut", label: "잘라내기" }, { role: "copy", label: "복사" }, { role: "paste", label: "붙여넣기" }, { role: "selectAll", label: "모두 선택" }] },
       { label: "보기", submenu: [{ role: "zoomIn", label: "크게" }, { role: "zoomOut", label: "작게" }, { role: "resetZoom", label: "원래 크기" }, { type: "separator" }, { role: "togglefullscreen", label: "전체 화면" }, { role: "toggleDevTools", label: "개발자 도구" }] },
     ]));

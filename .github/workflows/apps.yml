@@ -95,7 +95,7 @@ jobs:
       - id: ver
         run: |
           echo "v=$(node -p "require('./EXE/package.json').version")" >> "$GITHUB_OUTPUT"
-          mkdir -p out && cd CLI && zip -q ../out/lago-cli.zip lago.js lago.cmd install.cmd install.sh package.json README.md
+          mkdir -p out && cd CLI && zip -q ../out/lago-cli.zip lago.js lago.cmd install.cmd install.sh uninstall.cmd uninstall.sh package.json README.md
           cd .. && find out -type f | sort
       - uses: softprops/action-gh-release@v2
         with:

@@ -23,3 +23,12 @@ type 글.txt | lago "요약해 줘"  # 파이프 (맥: cat 글.txt | lago ...)
 저장은 지금 폴더 안에만 해요.
 
 로그인 정보는 `~/.lago/config.json`에 있어요. `lago logout`으로 지워요. 로그인하지 않으면 위키백과에서 찾은 내용만 보여 줘요.
+
+## 지우기
+
+```
+lago uninstall        (묻지 않고 지우려면 lago uninstall -y)
+```
+
+로그인 정보(`~/.lago`), 설치 파일, Windows의 PATH 항목까지 지워요. `lago.exe`는 창을 닫은 뒤 스스로 사라져요.
+명령이 안 되면 압축 안의 `uninstall.cmd`(Windows) 또는 `uninstall.sh`(맥 · 리눅스)를 실행해도 돼요.
