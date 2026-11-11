@@ -731,6 +731,30 @@ html[data-lago=dark] .shell.code .send,html[data-lago=dark] .shell.code .btn.pri
 .pvcf{gap:8px;padding:6px 10px;border-top:1px solid var(--gline)}
 .pvcb[hidden],.pvcf[hidden]{display:none!important}
 .preview .bar2{flex-wrap:nowrap;gap:4px;padding:8px 10px}.preview .bar2 .seg button{white-space:nowrap;padding-inline:9px}
+/* ==MANAGE== 사이드바 관리 */
+.mngbtn{border:0;background:none;color:#2563EB;font:600 12px/1 inherit;padding:4px 6px;border-radius:6px;cursor:pointer}
+.mngbtn:hover{background:#EAF1FF}
+.mbar{display:grid;gap:8px;margin:2px 6px 8px;padding:10px;border:1px solid #D6E3FB;border-radius:12px;background:#F6F9FF}
+.mmenu{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px;color:#64748B}
+.mpill{border:1px solid #D6E3FB;background:#fff;color:#64748B;border-radius:999px;padding:3px 9px;font:inherit;font-size:12px;cursor:pointer}
+.mpill.on{background:#E8F5EC;border-color:#BFE3CB;color:#166534;font-weight:600}
+.mrow{display:flex;align-items:center;gap:9px;width:100%;text-align:left}
+.mrow .tt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chk{flex:none;width:17px;height:17px;border:1.5px solid #AFC2E8;border-radius:5px;display:grid;place-items:center;background:#fff;color:#fff}
+.mrow.on{background:#EAF1FF}.mrow.on .chk{background:linear-gradient(135deg,#2563EB,#16A34A);border-color:transparent}
+.side .head{gap:6px}.side .head .dropm{flex:none;margin-right:-2px}.side .head .toggle{flex:none}.side .head .toggle button{white-space:nowrap}
+/* ==UPDW== 업데이트 마법사 */
+.upw h3{margin:0;font-size:17px;color:#0B2A6F}
+.upsteps{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#94A3B8;margin-bottom:2px}
+.upsteps span{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.upsteps i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1.5px solid #CBD5E1;font-style:normal;font-size:11px;color:#94A3B8}
+.upsteps b{flex:1;height:2px;background:#E2E8F0;border-radius:2px;min-width:12px}
+.upsteps .cur{color:#2563EB}.upsteps .cur i{border-color:#2563EB;color:#2563EB}
+.upsteps .done{color:#16A34A}.upsteps .done i{background:#16A34A;border-color:#16A34A;color:#fff}
+.upnotes{margin:0;padding:10px 12px 10px 28px;background:#F6F8FC;border-radius:10px;font-size:13px;line-height:1.6;max-height:28vh;overflow:auto}
+.upbar{height:10px;border-radius:6px;background:#E8EEF9;overflow:hidden}
+.upbar i{display:block;height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,#2563EB,#16A34A);transition:width .15s linear}
+.err-t{color:#B3261E}
 /* ==DARK-GEN-START== */
 
 :root[data-lago=dark]{color-scheme:dark;--bg:#14161C;--card:#1D2028;--side:#181B21;--line:#2E3441;--ink:#E7EAF3;--ink2:#C5CBDA;--mut:#9CA5BA;--mut2:#8A93A9;--mut3:#7B849A;--blue:#8FAAF5;--sky:#7FA2FF;--mist:#212A45;--sel:#283766;--gbg:#14201A;--gt:#1B2E24;--gline:#27402F;--gside:#17241D;--kt:#16293B;--warnbg:#33231B;--g:#4CC585;--gd:#BDE8D0;--kd:#8CC6F2;--err:#F07468;--warn:#E08A62}
@@ -912,6 +936,25 @@ html[data-lago=dark] .shell.code .send,html[data-lago=dark] .shell.code .btn.pri
 :root[data-lago=dark] .pvl.error b,:root[data-lago=dark] .pvl.error span{color:#E8837D}
 :root[data-lago=dark] .pvl.warn b,:root[data-lago=dark] .pvl.warn span{color:#E8AB7D}
 :root[data-lago=dark] .pvfull{background:#212121}
+:root[data-lago=dark] /* ==MANAGE== 사이드바 관리 */
+.mngbtn{color:#7D9EE8}
+:root[data-lago=dark] .mngbtn:hover{background:#212734}
+:root[data-lago=dark] .mbar{border:1px solid #394356;background:#1D222D}
+:root[data-lago=dark] .mmenu{color:#A6B0BF}
+:root[data-lago=dark] .mpill{border:1px solid #394356;background:#212121;color:#A6B0BF}
+:root[data-lago=dark] .mpill.on{background:#27392C;border-color:#4A6E56;color:#9AE9B8}
+:root[data-lago=dark] .chk{border:1.5px solid #4E5B75;background:#212121}
+:root[data-lago=dark] .mrow.on{background:#212734}
+:root[data-lago=dark] /* ==UPDW== 업데이트 마법사 */
+.upw h3{color:#97B2ED}
+:root[data-lago=dark] .upsteps i{border:1.5px solid #4C5764}
+:root[data-lago=dark] .upsteps b{background:#2D343D}
+:root[data-lago=dark] .upsteps .cur{color:#7D9EE8}
+:root[data-lago=dark] .upsteps .cur i{color:#7D9EE8}
+:root[data-lago=dark] .upsteps .done{color:#7DE8A4}
+:root[data-lago=dark] .upnotes{background:#1E242F}
+:root[data-lago=dark] .upbar{background:#242B38}
+:root[data-lago=dark] .err-t{color:#E8837D}
 :root[data-lago=dark] [style*="background:#fde8e4" i],:root[data-lago=dark] [style*="background: #fde8e4" i]{background:#382724 !important}
 :root[data-lago=dark] [style*="color:#c0392b" i],:root[data-lago=dark] [style*="color: #c0392b" i]{color:#E38B82 !important}
 :root[data-lago=dark] [style*="background:#eef2f8" i],:root[data-lago=dark] [style*="background: #eef2f8" i]{background:#232A35 !important}

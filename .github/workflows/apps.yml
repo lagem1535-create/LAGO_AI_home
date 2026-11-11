@@ -96,7 +96,7 @@ jobs:
         run: |
           echo "v=$(node -p "require('./EXE/package.json').version")" >> "$GITHUB_OUTPUT"
           mkdir -p out && cd CLI && zip -q ../out/lago-cli.zip lago.js lago.cmd install.cmd install.sh uninstall.cmd uninstall.sh package.json README.md
-          cd .. && (cd EXT && zip -qr ../out/lago-chrome.zip . -x "*.DS_Store") && find out -type f | sort
+          cd .. && (cd EXT && zip -qr ../out/lago-chrome.zip . -x "*.DS_Store") && find out -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.apk" -o -name "*.zip" \) -execdir sha256sum {} \; | sed "s# \./# #" > out/SHA256SUMS.txt && cat out/SHA256SUMS.txt && find out -type f | sort
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: app-v${{ steps.ver.outputs.v }}
@@ -116,3 +116,4 @@ jobs:
             out/**/*.dmg
             out/**/*.apk
             out/*.zip
+            out/SHA256SUMS.txt

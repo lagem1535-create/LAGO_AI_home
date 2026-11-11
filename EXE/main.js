@@ -1,9 +1,12 @@
 // LAGO Desktop — LAGO 웹앱을 창으로 열고, 웹에서는 못 하는 일(작업 폴더 읽기 · 명령 실행 · 파일 저장)을 더해요.
 // 안전 장치: LAGO 주소에서 온 요청만 받아요 · 폴더 밖 경로는 막아요 · 실행과 저장은 항상 확인 창에서 허락받아요.
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
+const https = require("https");
+const crypto = require("crypto");
+const os = require("os");
 
 const APP_URL = process.env.LAGO_URL || "https://lago-ai-home.lagem1535.workers.dev";
 const ORIGIN = new URL(APP_URL).origin;
@@ -174,6 +177,88 @@ async function uninstallHelp() {
   }
 }
 
+
+/* ---------- 업데이트: 새 버전을 내려받아 설치 마법사를 열어 줘요 ---------- */
+const REPO = "lagem1535-create/LAGO_AI_home";
+const HOSTS = /^(api\.github\.com|github\.com|objects\.githubusercontent\.com|release-assets\.githubusercontent\.com)$/;
+const UPD = { info: null, file: null, busy: false };
+function getBuf(url, opt = {}, hop = 0) {
+  return new Promise((resolve, reject) => {
+    let u; try { u = new URL(url); } catch { return reject(new Error("주소가 올바르지 않아요")); }
+    if (u.protocol !== "https:" || !HOSTS.test(u.hostname)) return reject(new Error("허용되지 않은 주소예요"));
+    const req = https.get(u, { headers: { "user-agent": "lago-desktop", accept: "application/octet-stream, application/vnd.github+json" } }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hop < 5) { res.resume(); return resolve(getBuf(new URL(res.headers.location, u).href, opt, hop + 1)); }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error("서버 응답 " + res.statusCode)); }
+      if (opt.file) {
+        const total = Number(res.headers["content-length"] || 0); let done = 0, last = 0;
+        const out = fs.createWriteStream(opt.file); const h = crypto.createHash("sha256");
+        res.on("data", (d) => { done += d.length; h.update(d); const now = Date.now(); if (opt.onProgress && now - last > 120) { last = now; opt.onProgress(done, total); } });
+        res.pipe(out);
+        out.on("finish", () => { opt.onProgress && opt.onProgress(done, total || done); resolve({ sha256: h.digest("hex"), size: done }); });
+        out.on("error", reject); res.on("error", reject);
+      } else { const a = []; res.on("data", (d) => a.push(d)); res.on("end", () => resolve(Buffer.concat(a))); res.on("error", reject); }
+    });
+    req.setTimeout(30000, () => req.destroy(new Error("연결이 너무 오래 걸려요")));
+    req.on("error", reject);
+  });
+}
+const vnum = (v) => String(v || "").split(".").map((x) => parseInt(x, 10) || 0);
+const vnewer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+function pickAsset(assets) {
+  const portable = !!process.env.PORTABLE_EXECUTABLE_FILE;
+  const want = MAC ? "LAGO-Mac-" + (process.arch === "arm64" ? "arm64" : "x64") + ".dmg" : WIN ? (portable ? "LAGO-Portable.exe" : "LAGO-Setup.exe") : "";
+  return assets.find((a) => a.name === want) || null;
+}
+async function updCheck() {
+  const j = JSON.parse((await getBuf(`https://api.github.com/repos/${REPO}/releases/latest`)).toString("utf8"));
+  const m = /^app-v(\d+\.\d+\.\d+)/.exec(String(j.tag_name || ""));
+  const cur = app.getVersion();
+  const asset = pickAsset(j.assets || []);
+  const sums = (j.assets || []).find((a) => a.name === "SHA256SUMS.txt");
+  const info = { current: cur, latest: m ? m[1] : cur, newer: !!(m && vnewer(m[1], cur) && asset), notes: String(j.body || "").slice(0, 900), name: asset ? asset.name : "", size: asset ? asset.size : 0, mode: MAC ? "mac" : process.env.PORTABLE_EXECUTABLE_FILE ? "portable" : WIN ? "setup" : "none", url: asset ? asset.browser_download_url : "", sums: sums ? sums.browser_download_url : "" };
+  UPD.info = info; return info;
+}
+function say(ch, data) { try { if (win && !win.isDestroyed()) win.webContents.send(ch, data); } catch {} }
+async function updDownload() {
+  const info = UPD.info || (await updCheck());
+  if (!info.newer || !info.url) throw new Error("받을 새 버전이 없어요");
+  if (UPD.busy) throw new Error("이미 내려받는 중이에요");
+  UPD.busy = true;
+  try {
+    const dir = path.join(app.getPath("temp"), "lago-update"); fs.mkdirSync(dir, { recursive: true });
+    const dest = path.join(dir, info.name); try { fs.rmSync(dest, { force: true }); } catch {}
+    const r = await getBuf(info.url, { file: dest, onProgress: (d, t) => say("lago:upd-progress", { done: d, total: t, pct: t ? Math.min(99, Math.round((d / t) * 100)) : 0 }) });
+    if (info.sums) {
+      const txt = (await getBuf(info.sums)).toString("utf8");
+      const line = txt.split(/\r?\n/).map((l) => l.trim().split(/\s+\*?/)).find((x) => x[1] === info.name);
+      if (!line) throw new Error("새 파일의 확인 값을 찾지 못해서 멈췄어요");
+      if (line[0].toLowerCase() !== r.sha256) { try { fs.rmSync(dest, { force: true }); } catch {} throw new Error("내려받은 파일이 올바르지 않아요 (확인 값 불일치). 다시 시도해 주세요"); }
+    }
+    UPD.file = dest; say("lago:upd-progress", { done: r.size, total: r.size, pct: 100 });
+    return { ok: true, name: info.name, mode: info.mode, verified: !!info.sums };
+  } finally { UPD.busy = false; }
+}
+function updInstall() {
+  if (!UPD.file || !fs.existsSync(UPD.file)) throw new Error("먼저 내려받아 주세요");
+  const f = UPD.file;
+  if (WIN && !process.env.PORTABLE_EXECUTABLE_FILE) {
+    // 설치 마법사(NSIS)를 열고 이 앱은 닫아요. 마법사가 끝나면 새 LAGO가 켜져요.
+    const c = spawn(f, [], { detached: true, stdio: "ignore" }); c.unref();
+    setTimeout(() => app.quit(), 700);
+    return { ok: true, how: "wizard" };
+  }
+  if (MAC) { shell.openPath(f); return { ok: true, how: "dmg" }; }
+  const dl = path.join(app.getPath("downloads"), path.basename(f));
+  try { fs.copyFileSync(f, dl); shell.showItemInFolder(dl); } catch { shell.showItemInFolder(f); }
+  return { ok: true, how: "portable" };
+}
+ipcMain.handle("lago:upd-check", async (e) => { guard(e); try { return await updCheck(); } catch (er) { return { error: er.message }; } });
+ipcMain.handle("lago:upd-download", async (e) => { guard(e); try { return await updDownload(); } catch (er) { return { error: er.message }; } });
+ipcMain.handle("lago:upd-install", (e) => { guard(e); try { return updInstall(); } catch (er) { return { error: er.message }; } });
+async function checkOnStart() {
+  try { const i = await updCheck(); if (i.newer) say("lago:upd-avail", i); } catch {}
+}
+
 ipcMain.on("lago:retry", (e) => { if (win) win.loadURL(APP_URL); });
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -181,11 +266,15 @@ else {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.whenReady().then(() => {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: "LAGO", submenu: [{ label: "새로 고침", accelerator: "F5", click: () => win && win.reload() }, { label: "처음 화면", click: () => win && win.loadURL(APP_URL) }, { label: "LAGO 지우기…", click: () => uninstallHelp() }, { type: "separator" }, { role: "quit", label: "끝내기" }] },
+      { label: "LAGO", submenu: [{ label: "새로 고침", accelerator: "F5", click: () => win && win.reload() }, { label: "처음 화면", click: () => win && win.loadURL(APP_URL) }, { label: "업데이트 확인…", click: () => { say("lago:upd-open", {}); } }, { label: "LAGO 지우기…", click: () => uninstallHelp() }, { type: "separator" }, { role: "quit", label: "끝내기" }] },
       { label: "편집", submenu: [{ role: "undo", label: "되돌리기" }, { role: "redo", label: "다시 하기" }, { type: "separator" }, { role: "cut", label: "잘라내기" }, { role: "copy", label: "복사" }, { role: "paste", label: "붙여넣기" }, { role: "selectAll", label: "모두 선택" }] },
       { label: "보기", submenu: [{ role: "zoomIn", label: "크게" }, { role: "zoomOut", label: "작게" }, { role: "resetZoom", label: "원래 크기" }, { type: "separator" }, { role: "togglefullscreen", label: "전체 화면" }, { role: "toggleDevTools", label: "개발자 도구" }] },
     ]));
-    createWindow();
+    // 예전 화면이 남아 새 기능이 늦게 보이는 일이 없게 시작할 때 저장된 화면 파일을 비워요
+    session.defaultSession.clearCache().catch(() => {}).finally(() => {
+      createWindow();
+      win.webContents.once("did-finish-load", () => setTimeout(checkOnStart, 4000));
+    });
   });
   app.on("window-all-closed", () => app.quit());
 }

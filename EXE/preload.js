@@ -12,6 +12,15 @@ if (location.origin === ORIGIN) {
     readFile: (rel) => ipcRenderer.invoke("lago:read", String(rel || "")),
     writeFile: (rel, text) => ipcRenderer.invoke("lago:write", String(rel || ""), String(text || "")),
     run: (cmd, cwd) => ipcRenderer.invoke("lago:run", String(cmd || ""), String(cwd || "")),
+    updCheck: () => ipcRenderer.invoke("lago:upd-check"),
+    updDownload: () => ipcRenderer.invoke("lago:upd-download"),
+    updInstall: () => ipcRenderer.invoke("lago:upd-install"),
+    onUpd: (cb) => {
+      if (typeof cb !== "function") return;
+      ipcRenderer.on("lago:upd-avail", (_e, i) => cb("avail", i));
+      ipcRenderer.on("lago:upd-open", () => cb("open", null));
+      ipcRenderer.on("lago:upd-progress", (_e, p) => cb("progress", p));
+    },
   });
 }
 if (location.origin === ORIGIN) {
