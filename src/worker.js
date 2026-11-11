@@ -935,6 +935,65 @@ async function me(req, env, url) {
   }
   return json(out);
 }
+
+// ---- 보안: 내 계정에 접속한 기기 목록 (KV sec:<uid>) ----
+// 기기마다 브라우저가 만든 임의 번호(sid)로 구분해요. IP·지역은 Cloudflare가 알려 주는 값만 믿고, 기기 종류·이름은 앱이 보낸 값을 짧게 잘라 써요.
+const SEC_KINDS = ["web", "app", "android", "cli", "ext"];
+async function secApi(req, env, url, p) {
+  const origin = req.headers.get("origin");
+  if (origin && origin !== url.origin && !/^chrome-extension:\/\//.test(origin)) return json({ error: "허용되지 않은 요청이에요" }, 403);
+  const u = await tokenUser(req, env);
+  if (!u) return json({ error: "로그인이 필요해요" }, 401);
+  const key = "sec:" + u.localId;
+  let d = {};
+  try { d = JSON.parse((await env.ADMIN_KV.get(key)) || "{}"); } catch {}
+  d.sessions = Array.isArray(d.sessions) ? d.sessions : [];
+  d.events = Array.isArray(d.events) ? d.events : [];
+  const save = () => env.ADMIN_KV.put(key, JSON.stringify(d), { expirationTtl: 90 * 86400 });
+  const view = (sid) => ({
+    sessions: d.sessions.filter((x) => !x.revoked).sort((a, b) => b.last - a.last).map((x) => ({ ...x, me: x.id === sid })),
+    events: d.events.slice(0, 30),
+  });
+  if (p === "/api/security/ping" && req.method === "POST") {
+    const b = await req.json().catch(() => ({}));
+    const sid = String(b.sid || "").replace(/[^a-z0-9]/gi, "").slice(0, 24);
+    if (sid.length < 8) return json({ error: "기기 번호가 없어요" }, 400);
+    const now = Date.now();
+    const cf = req.cf || {};
+    const ip = req.headers.get("cf-connecting-ip") || "?";
+    const where = [cf.city, cf.country].filter(Boolean).join(", ");
+    let s = d.sessions.find((x) => x.id === sid);
+    if (s && s.revoked) return json({ revoked: true });
+    const kind = SEC_KINDS.includes(b.kind) ? b.kind : "web";
+    const info = { kind, os: cap(b.os || "", 40), app: cap(b.app || "", 40), ip, where, last: now };
+    if (!s) {
+      s = { id: sid, first: now, ...info };
+      d.sessions.push(s);
+      d.events.unshift({ at: now, type: "login", kind, os: info.os, app: info.app, ip, where });
+      d.sessions = d.sessions.sort((a, b2) => b2.last - a.last).slice(0, 20);
+      d.events = d.events.slice(0, 40);
+    } else {
+      if (s.ip !== ip) d.events.unshift({ at: now, type: "ip", kind, os: info.os, app: info.app, ip, where });
+      Object.assign(s, info);
+    }
+    await save();
+    return json(view(sid));
+  }
+  if (p === "/api/security/list" && req.method === "GET") return json(view(url.searchParams.get("sid") || ""));
+  if (p === "/api/security/revoke" && req.method === "POST") {
+    const b = await req.json().catch(() => ({}));
+    const keep = String(b.keep || "");
+    let n = 0;
+    for (const s of d.sessions) {
+      if (s.revoked) continue;
+      if (b.all ? s.id !== keep : s.id === b.id) { s.revoked = Date.now(); n++; d.events.unshift({ at: Date.now(), type: "revoke", kind: s.kind, os: s.os, app: s.app, ip: s.ip, where: s.where }); }
+    }
+    d.events = d.events.slice(0, 40);
+    await save();
+    return json({ ok: true, n, ...view(keep) });
+  }
+  return json({ error: "없는 주소예요" }, 404);
+}
 async function tokenUser(req, env) {
   const tok = (req.headers.get("authorization") || "").replace(/^Bearer /, "");
   let apiKey;
@@ -1420,6 +1479,7 @@ export default {
     if (!p.startsWith("/api/")) { const ar = await env.ASSETS.fetch(req); if (p.startsWith("/s/") || p.startsWith("/t/")) { const h = new Headers(ar.headers); h.set("x-robots-tag", "noindex"); return new Response(ar.body, { status: ar.status, headers: h }); } return ar; }
     try {
       if (p === "/api/tasks/sync") return req.method === "POST" ? await tasksSync(req, env, url) : json({ error: "POST만 돼요" }, 405);
+      if (p.startsWith("/api/security/")) return await secApi(req, env, url, p);
       if (p === "/api/me") return req.method === "GET" ? await me(req, env, url) : json({ error: "GET만 돼요" }, 405);
       if (p === "/api/admin/model-url") return req.method === "POST" ? await registerModelUrl(req, env) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/mcp/")) return await mcpApi(req, env, url);

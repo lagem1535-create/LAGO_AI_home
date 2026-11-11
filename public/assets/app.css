@@ -755,6 +755,36 @@ html[data-lago=dark] .shell.code .send,html[data-lago=dark] .shell.code .btn.pri
 .upbar{height:10px;border-radius:6px;background:#E8EEF9;overflow:hidden}
 .upbar i{display:block;height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,#2563EB,#16A34A);transition:width .15s linear}
 .err-t{color:#B3261E}
+/* ==SECURITY== */
+.seclist{display:grid;gap:8px;margin-top:10px}
+.secrow{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:13px;padding:11px 13px;background:var(--card)}
+.secrow.me{border-color:var(--sky);background:var(--mist)}
+.secrow.ev{padding:8px 13px;border-style:dashed}
+.secico{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--mist);color:var(--blue)}
+.secrow.me .secico{background:var(--card)}
+.secmain{flex:1;min-width:0;line-height:1.55;overflow-wrap:anywhere}
+.tag.on{background:var(--blue);color:#fff;border-color:transparent}
+/* ==AUTHFLOW== */
+.brand{background-size:160% 160%;animation:brandShift 16s ease-in-out infinite alternate}
+@keyframes brandShift{0%{background-position:30% 20%}100%{background-position:80% 70%}}
+.brand::before{animation:gridDrift 40s linear infinite}
+@keyframes gridDrift{to{background-position:44px 44px,44px 44px}}
+.brand::after{animation:blobFloat 13s ease-in-out infinite alternate;translate:calc(var(--mx,0)*-18px) calc(var(--my,0)*-18px);transition:translate .6s ease-out}
+@keyframes blobFloat{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-50px,-34px) scale(1.12)}}
+.brand h1,.brand .sub,.brand li{animation:fadeUp .7s cubic-bezier(.2,.7,.2,1) backwards}
+.brand h1{animation-delay:.08s}.brand .sub{animation-delay:.2s}
+.brand li:nth-child(1){animation-delay:.32s}.brand li:nth-child(2){animation-delay:.42s}.brand li:nth-child(3){animation-delay:.52s}
+.brand li{transition:transform .25s ease,background .25s ease,border-color .25s ease}
+.brand li:hover{transform:translateX(6px);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28)}
+.form>*{animation:fadeUp .55s cubic-bezier(.2,.7,.2,1) backwards}
+.form>*:nth-child(1){animation-delay:.05s}.form>*:nth-child(2){animation-delay:.1s}.form>*:nth-child(3){animation-delay:.15s}.form>*:nth-child(4){animation-delay:.2s}.form>*:nth-child(5){animation-delay:.25s}.form>*:nth-child(6){animation-delay:.3s}.form>*:nth-child(7){animation-delay:.35s}.form>*:nth-child(n+8){animation-delay:.4s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.form input,.form select{transition:border-color .2s,box-shadow .25s,transform .2s}
+.form input:focus{box-shadow:0 0 0 4px rgba(37,99,235,.13);transform:translateY(-1px)}
+.form .btn{transition:transform .18s ease,box-shadow .2s ease,border-color .2s,background .2s}
+.form .btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(11,42,111,.14)}
+.form .btn:active{transform:translateY(0) scale(.985);box-shadow:none}
+@media (prefers-reduced-motion:reduce){.brand,.brand::before,.brand::after,.brand h1,.brand .sub,.brand li,.form>*{animation:none!important}}
 /* ==DARK-GEN-START== */
 
 :root[data-lago=dark]{color-scheme:dark;--bg:#14161C;--card:#1D2028;--side:#181B21;--line:#2E3441;--ink:#E7EAF3;--ink2:#C5CBDA;--mut:#9CA5BA;--mut2:#8A93A9;--mut3:#7B849A;--blue:#8FAAF5;--sky:#7FA2FF;--mist:#212A45;--sel:#283766;--gbg:#14201A;--gt:#1B2E24;--gline:#27402F;--gside:#17241D;--kt:#16293B;--warnbg:#33231B;--g:#4CC585;--gd:#BDE8D0;--kd:#8CC6F2;--err:#F07468;--warn:#E08A62}
@@ -953,6 +983,7 @@ html[data-lago=dark] .shell.code .send,html[data-lago=dark] .shell.code .btn.pri
 :root[data-lago=dark] .upnotes{background:#1E242F}
 :root[data-lago=dark] .upbar{background:#242B38}
 :root[data-lago=dark] .err-t{color:#E8837D}
+:root[data-lago=dark] .tag.on{background:#3B62D6}
 :root[data-lago=dark] [style*="background:#fde8e4" i],:root[data-lago=dark] [style*="background: #fde8e4" i]{background:#382724 !important}
 :root[data-lago=dark] [style*="color:#c0392b" i],:root[data-lago=dark] [style*="color: #c0392b" i]{color:#E38B82 !important}
 :root[data-lago=dark] [style*="background:#eef2f8" i],:root[data-lago=dark] [style*="background: #eef2f8" i]{background:#232A35 !important}
