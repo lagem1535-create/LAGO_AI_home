@@ -731,18 +731,18 @@ html[data-lago=dark] .shell.code .send,html[data-lago=dark] .shell.code .btn.pri
 .pvcf{gap:8px;padding:6px 10px;border-top:1px solid var(--gline)}
 .pvcb[hidden],.pvcf[hidden]{display:none!important}
 .preview .bar2{flex-wrap:nowrap;gap:4px;padding:8px 10px}.preview .bar2 .seg button{white-space:nowrap;padding-inline:9px}
-/* ==MANAGE== 사이드바 관리 */
-.mngbtn{border:0;background:none;color:#2563EB;font:600 12px/1 inherit;padding:4px 6px;border-radius:6px;cursor:pointer}
+/* ==MENUED== 사이드바 메뉴 편집 */
+.mngbtn{display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:#2563EB;font:600 12px/1 inherit;padding:4px 7px;border-radius:6px;cursor:pointer}
 .mngbtn:hover{background:#EAF1FF}
-.mbar{display:grid;gap:8px;margin:2px 6px 8px;padding:10px;border:1px solid #D6E3FB;border-radius:12px;background:#F6F9FF}
-.mmenu{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px;color:#64748B}
-.mpill{border:1px solid #D6E3FB;background:#fff;color:#64748B;border-radius:999px;padding:3px 9px;font:inherit;font-size:12px;cursor:pointer}
-.mpill.on{background:#E8F5EC;border-color:#BFE3CB;color:#166534;font-weight:600}
-.mrow{display:flex;align-items:center;gap:9px;width:100%;text-align:left}
-.mrow .tt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chk{flex:none;width:17px;height:17px;border:1.5px solid #AFC2E8;border-radius:5px;display:grid;place-items:center;background:#fff;color:#fff}
-.mrow.on{background:#EAF1FF}.mrow.on .chk{background:linear-gradient(135deg,#2563EB,#16A34A);border-color:transparent}
-.side .head{gap:6px}.side .head .dropm{flex:none;margin-right:-2px}.side .head .toggle{flex:none}.side .head .toggle button{white-space:nowrap}
+.menued{max-width:420px}
+.medlist{display:grid;gap:4px;max-height:52vh;overflow:auto;padding:2px}
+.med{display:flex;align-items:center;gap:10px;padding:7px 8px 7px 10px;border:1px solid #E6EBF5;border-radius:11px;background:#fff}
+.med.off{background:#F8FAFD}.med.off .mico,.med.off .mlab{opacity:.5}
+.mico{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#EAF1FF;color:#2563EB;flex:none}
+.mlab{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13.5px}
+.mlab small{margin-left:6px;font-weight:500;font-size:11px;color:#16A34A}
+.mmv{display:inline-flex;flex:none}
+.mmv .iconbtn{width:28px;height:28px}.mmv .iconbtn[disabled]{opacity:.3}
 /* ==UPDW== 업데이트 마법사 */
 .upw h3{margin:0;font-size:17px;color:#0B2A6F}
 .upsteps{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#94A3B8;margin-bottom:2px}
@@ -936,15 +936,13 @@ html[data-lago=dark] .shell.code .send,html[data-lago=dark] .shell.code .btn.pri
 :root[data-lago=dark] .pvl.error b,:root[data-lago=dark] .pvl.error span{color:#E8837D}
 :root[data-lago=dark] .pvl.warn b,:root[data-lago=dark] .pvl.warn span{color:#E8AB7D}
 :root[data-lago=dark] .pvfull{background:#212121}
-:root[data-lago=dark] /* ==MANAGE== 사이드바 관리 */
+:root[data-lago=dark] /* ==MENUED== 사이드바 메뉴 편집 */
 .mngbtn{color:#7D9EE8}
 :root[data-lago=dark] .mngbtn:hover{background:#212734}
-:root[data-lago=dark] .mbar{border:1px solid #394356;background:#1D222D}
-:root[data-lago=dark] .mmenu{color:#A6B0BF}
-:root[data-lago=dark] .mpill{border:1px solid #394356;background:#212121;color:#A6B0BF}
-:root[data-lago=dark] .mpill.on{background:#27392C;border-color:#4A6E56;color:#9AE9B8}
-:root[data-lago=dark] .chk{border:1.5px solid #4E5B75;background:#212121}
-:root[data-lago=dark] .mrow.on{background:#212734}
+:root[data-lago=dark] .med{border:1px solid #353E50;background:#212121}
+:root[data-lago=dark] .med.off{background:#1D242D}
+:root[data-lago=dark] .mico{background:#212734;color:#7D9EE8}
+:root[data-lago=dark] .mlab small{color:#7DE8A4}
 :root[data-lago=dark] /* ==UPDW== 업데이트 마법사 */
 .upw h3{color:#97B2ED}
 :root[data-lago=dark] .upsteps i{border:1.5px solid #4C5764}

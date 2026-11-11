@@ -139,8 +139,9 @@ Google로 가입했다면 아래 연결 코드를 복사해=>If you signed up wi
 Android 앱=>Android app
 웹=>Web
 공지=>Notice
-전체 선택=>Select all
-선택 해제=>Deselect all
-개 선택=>selected
-개 대화를 지울까요? 되돌릴 수 없어요.=> chats will be deleted. This can't be undone.
-메뉴 표시=>Show in menu
+
+사이드바 메뉴 편집=>Edit sidebar menu
+켜 둔 항목만 사이드바에 나와요=>Only items turned on appear in the sidebar
+화살표로 순서를 바꿔요.=>Use the arrows to reorder.
+기본값으로=>Reset to default
+기본 메뉴로 돌렸어요=>Menu reset to default
