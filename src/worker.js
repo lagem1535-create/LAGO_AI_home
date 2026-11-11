@@ -1390,7 +1390,7 @@ async function adminApi(req, env, ctx, url, raw) {
     const base = await llamaUrl(env);
     let b = {}; if (req.method === "POST") { try { b = await req.json(); } catch {} }
     const sel = (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
-    if (req.method === "POST") {
+    if (req.method === "POST" && (b.reload || b.version)) {
       if (!base || !env.LLAMA_API_KEY) return json({ error: "서버 주소·키를 먼저 넣어 주세요" }, 400);
       const ver = b.reload ? sel : String(b.version || "");
       if (!VERS.some((x) => x.id === ver)) return json({ error: "없는 버전이에요" }, 400);
