@@ -76,6 +76,20 @@ addEventListener(PATHMODE?"popstate":"hashchange",onNav);
 
 /* ---------- auth screens ---------- */
 function brandPanel(){return `<section class="brand" aria-label="LAGO 소개">${WM(30,"#fff")}<h1>찾고 알려주는<br>사실적인 AI</h1><p class="sub">데이터를 찾고, 첨가 없이 알려 줘요.</p><ul><li><b>FACT</b> <span>사실만 빠르고 간편하게</span></li><li><b>THINK</b> <span>생각하고 추론</span></li><li><b>CODE</b> <span>더 나은 코드</span></li></ul></section>`;}
+/* ---------- 시간대별 인사 (새로 열 때마다 바뀌고, 한 번 정해지면 그 화면에서는 그대로) ---------- */
+const GSEED=Math.floor(Math.random()*1e6);
+function greet(){const n=(S.user&&S.user.name)||"",h=new Date().getHours(),en=S.lang==="en";
+const T=h<5?"dawn":h<7?"early":h<11?"morning":h<14?"noon":h<18?"afternoon":h<22?"evening":"night";
+const K={dawn:[[`아직 안 주무셨네요, ${n}님`,"무슨 대화를 시작해 볼까요?"],[`새벽이에요, ${n}님`,"조용한 시간에 궁금한 걸 천천히 물어보세요."],[`깊은 밤이네요, ${n}님`,"오늘은 어떤 이야기부터 해 볼까요?"]],
+early:[[`이른 아침이네요, ${n}님`,"오늘은 무엇부터 시작해 볼까요?"],[`일찍 일어나셨네요, ${n}님`,"하루의 첫 질문은 뭘까요?"],[`${n}님, 좋은 아침이에요`,"이른 시간, 가볍게 시작해 볼까요?"]],
+morning:[[`좋은 아침이에요, ${n}님`,"오늘 하루는 무엇부터 해 볼까요?"],[`${n}님, 아침이에요`,"궁금한 것부터 물어보세요."],[`오늘도 반가워요, ${n}님`,"무엇을 찾아 드릴까요?"]],
+noon:[[`점심은 드셨나요, ${n}님?`,"식사 뒤에 가볍게 물어볼 게 있나요?"],[`${n}님, 한낮이에요`,"지금 무엇을 도와드릴까요?"],[`안녕하세요, ${n}님`,"점심시간 틈에 궁금한 걸 찾아 드릴게요."]],
+afternoon:[[`${n}님, 오후예요`,"무엇을 도와드릴까요?"],[`오후도 힘내요, ${n}님`,"막힌 게 있으면 같이 찾아봐요."],[`다시 오셨네요, ${n}님`,"이어서 무엇을 해 볼까요?"]],
+evening:[[`저녁이네요, ${n}님`,"오늘 하루는 어땠나요? 무엇을 해 볼까요?"],[`수고 많았어요, ${n}님`,"남은 궁금증을 같이 풀어 볼까요?"],[`${n}님, 좋은 저녁이에요`,"지금 무엇이 궁금하세요?"]],
+night:[[`늦은 밤이네요, ${n}님`,"무슨 대화를 시작해 볼까요?"],[`${n}님, 밤이 깊었어요`,"잠들기 전에 궁금한 게 있나요?"],[`오늘 하루도 고생했어요, ${n}님`,"가볍게 이야기해 볼까요?"]]};
+const E={dawn:[[`Still up, ${n}?`,"What shall we start with?"],[`It’s the early hours, ${n}`,"Ask me anything, no rush."]],early:[[`Early start, ${n}`,"What shall we begin with today?"],[`Good morning, ${n}`,"What’s the first question of the day?"]],morning:[[`Good morning, ${n}`,"Where shall we start today?"],[`Nice to see you, ${n}`,"What can I look up for you?"]],noon:[[`Had lunch yet, ${n}?`,"Anything quick to ask?"],[`Hello, ${n}`,"What can I help with right now?"]],afternoon:[[`Good afternoon, ${n}`,"What can I help with?"],[`Welcome back, ${n}`,"What shall we do next?"]],evening:[[`Good evening, ${n}`,"What’s on your mind?"],[`Nice work today, ${n}`,"Shall we sort out what’s left?"]],night:[[`Late night, ${n}`,"What shall we start with?"],[`It’s getting late, ${n}`,"Anything to ask before bed?"]]};
+const G=en?[[`What can I help with, ${n}?`,"Ask anything. I’ll read up and answer with sources."],[`What shall we look up today, ${n}?`,"Ask anything."]]:[[`무엇을 도와드릴까요, ${n}님?`,"무엇이든 물어보세요. 찾아 읽고 출처와 함께 답할게요."],[`${n}님, 오늘은 뭘 찾아볼까요?`,"궁금한 건 무엇이든 물어보세요."]];
+const pool=[...(en?E:K)[T],...(en?E:K)[T],...G];return pool[GSEED%pool.length];}
 function vLogin(){return `<main class="auth">${brandPanel()}<section class="formside"><form class="form" id="loginForm" novalidate>
 <h2>LAGO에 오신 걸 환영해요</h2><p class="muted" style="margin:0 0 6px">로그인하고 대화를 이어가세요</p>
 <button type="button" class="btn" data-act="google">${googleG()} Google로 계속하기</button>
@@ -258,7 +272,7 @@ return shell(`${topbar("",S.goccia?"":`<button class="pill tempbtn ${tm?"on":""}
 ${tm?`<span class="tempicon">${ic("eyeoff",28)}</span><div><h1>임시 대화</h1><p class="muted" style="margin:6px 0 0">편하게 물어보세요. 끝내면 흔적 없이 사라져요.</p></div>
 <div class="promise">${[["clock","기록에 남지 않아요","최근 대화 · 검색에 안 보여요"],["shield","학습에 쓰지 않아요","LAGO 다음 버전 학습에서 빠져요"],["sliders","사용자 지정을 안 써요","내 지시문 · 프로젝트 자료를 참고하지 않아요"]].map(x=>`<div>${ic(x[0],17)}<span><b>${x[1]}</b><br><small>${x[2]}</small></span></div>`).join("")}</div>
 <div class="row" style="gap:10px;flex-wrap:wrap;justify-content:center;font-size:13px"><span class="muted">자동으로 지우기</span><div class="seg" style="width:auto">${["창을 닫으면","1시간 뒤","24시간 뒤"].map((t,i)=>`<button aria-pressed="${(S.ttl||0)===i}" data-ttl="${i}">${t}</button>`).join("")}</div></div>`
-:S.goccia?`<div><h1>안녕, 지우!</h1><p class="muted" style="margin:6px 0 0">궁금한 걸 물어봐. 찾아보고 쉽게 알려 줄게.</p></div>`:`<div><h1>안녕하세요, ${esc(S.user.name)}님</h1><p class="muted" style="margin:6px 0 0">무엇이든 물어보세요. 찾아 읽고 출처와 함께 답할게요.</p></div>`}
+:S.goccia?`<div><h1>안녕, 지우!</h1><p class="muted" style="margin:6px 0 0">궁금한 걸 물어봐. 찾아보고 쉽게 알려 줄게.</p></div>`:(g=>`<div><h1>${esc(g[0])}</h1><p class="muted" style="margin:6px 0 0">${esc(g[1])}</p></div>`)(greet())}
 ${composer(tm?"임시로 물어보세요":"LAGO에게 무엇이든 물어보세요")}
 ${S.goccia?kidHome():""}${tm||S.goccia?"":`<div class="quicktools">${TOOLS.map(t=>`<button data-go="${t.route}"><span style="color:${t.c}">${ic(t.ic,17)}</span>${t.lab}</button>`).join("")}<button data-go="services"><span style="color:#2BA3B8">${ic("plug",17)}</span>서비스 연결</button></div><div class="sugs" ${S.set.sugs===false?"hidden":""}>${(S.goccia?["블랙홀은 어떻게 생겨?","분수 나눗셈 쉽게 알려 줘","훈민정음은 누가 만들었어?"]:["훈민정음은 누가 만들었어?","독도는 어디에 있어?","이번 달 공휴일 알려 줘","광합성이 뭐야?"]).map(t=>`<button data-ask="${esc(t)}">${esc(t)}</button>`).join("")}</div>`}
 <p class="disc">${discText(false)}</p></div></div>`);}
@@ -1384,6 +1398,19 @@ S.banned=m.banned?{until:m.until||0,reason:m.reason||""}:null;S.isAdmin=!!m.admi
 if(before!==JSON.stringify([S.banned,S.user.plan,S.user.dailyLimit]))render();}
 catch(e){if(e&&/user-disabled|user-token-expired/.test(e.code||"")){S.fb.auth.signOut();toast("이용이 정지된 계정이에요");}}}
 setInterval(()=>document.querySelectorAll("[data-think]").forEach(e=>{const t0=+e.dataset.t0||(e.dataset.t0=Date.now(),+e.dataset.t0),sec=Math.floor((Date.now()-t0)/1000);e.querySelector(".tsec").textContent=sec>=2?sec+"초":"";}),700);
+
+/* ---------- 모바일 바텀시트: 배경 어둡게 + 아래로 끌어 닫기 ---------- */
+(function(){const SH=".pop,.acct:not(.acctwrap),.cmenu,.confirm,.tempask>.card,.tempask>form,.tempask>div:not(.noticebg)";let raf=0;
+const mob=()=>matchMedia("(max-width:760px)").matches;
+const upd=()=>{raf=0;const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);};
+new MutationObserver(()=>{if(!raf)raf=requestAnimationFrame(upd);}).observe(document.getElementById("app")||document.body,{childList:true,subtree:true});
+let t=null;
+document.addEventListener("touchstart",e=>{if(!mob())return;const el=e.target.closest(SH);if(!el)return;const r=el.getBoundingClientRect(),y=e.touches[0].clientY;if(y-r.top>40)return;t={el,y0:y,dy:0};el.style.transition="none";},{passive:true});
+document.addEventListener("touchmove",e=>{if(!t)return;t.dy=Math.max(0,e.touches[0].clientY-t.y0);t.el.style.transform="translateY("+t.dy+"px)";},{passive:true});
+const end=()=>{if(!t)return;const{el,dy}=t;t=null;el.style.transition="transform .2s ease";if(dy>90){el.style.transform="translateY(110%)";const w=el.closest(".tempask");const x=(w&&w.querySelector(".noticebg"))||w||document.body;setTimeout(()=>x.click(),160);}else{el.style.transform="";setTimeout(()=>{el.style.transition="";},220);}};
+document.addEventListener("touchend",end);document.addEventListener("touchcancel",end);
+document.addEventListener("click",e=>{if(e.target===document.body&&document.body.classList.contains("sheet-open")&&S.confirm){S.confirm=null;render();}},true);
+})();
 addEventListener("pointermove",e=>{const b=document.querySelector(".brand");if(!b)return;b.style.setProperty("--mx",((e.clientX/innerWidth)*2-1).toFixed(2));b.style.setProperty("--my",((e.clientY/innerHeight)*2-1).toFixed(2));},{passive:true});
 setInterval(()=>{meCheck();secPing();},300000);document.addEventListener("visibilitychange",()=>{if(!document.hidden){meCheck();secPing();}});
 function vBanned(){const b=S.banned||{};let left="";if(b.until){const m=Math.max(1,Math.ceil((b.until-Date.now())/60000));left=m>=60?Math.floor(m/60)+"시간 "+(m%60)+"분":m+"분";}
