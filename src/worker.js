@@ -132,6 +132,27 @@ async function loraApply(env, base, ver) {
   const r = await loraFetch(env, base, "POST", st.list.map((x) => ({ id: x.id, scale: verOf(x.path) === ver ? 1 : 0 })));
   return r.ok ? { ok: true } : r;
 }
+// 캐글 서버(fact_7)는 요청마다 version을 실어 보내서 바꿔요. 서버에 올라온 버전만 확인해요.
+async function kagState(env) {
+  const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 8000);
+  try {
+    const r = await fetch(env.MODEL_URL + "/versions", { signal: ac.signal, headers: { "x-key": env.MODEL_KEY, "user-agent": UA } });
+    if (!r.ok) return { ok: false, msg: r.status === 401 ? "서버 키(MODEL_KEY)가 맞지 않아요" : r.status === 404 ? "캐글 노트북이 예전 버전이에요 (fact_7을 새로 올려 주세요)" : "서버 응답 " + r.status };
+    const d = await r.json();
+    return { ok: true, loaded: Array.isArray(d.versions) ? d.versions : [], active: String(d.active || "") };
+  } catch { return { ok: false, msg: "캐글 서버에 연결하지 못했어요 (꺼졌거나 주소가 바뀌었어요)" }; } finally { clearTimeout(tm); }
+}
+const hasBackend = (env, base) => !!((base && env.LLAMA_API_KEY) || (env.MODEL_URL && env.MODEL_KEY));
+async function backendState(env, base) {
+  if (base && env.LLAMA_API_KEY) return loraState(env, base);
+  if (env.MODEL_URL && env.MODEL_KEY) return kagState(env);
+  return { ok: false, msg: "서버 주소·키가 없어요" };
+}
+async function backendApply(env, base, ver) {
+  if (base && env.LLAMA_API_KEY) return loraApply(env, base, ver);
+  const st = await kagState(env); if (!st.ok) return st;
+  return st.loaded.includes(ver) ? { ok: true } : { ok: false, msg: "캐글 서버에 그 버전이 올라와 있지 않아요 (fact_7의 VERSIONS를 확인하세요)" };
+}
 let loraKey = "";
 // 서버가 새로 켜졌거나 고른 버전이 바뀌었으면 한 번만 맞춰 줘요 (같은 주소·버전이면 건너뛰어요)
 async function ensureLora(env, base) {
@@ -454,6 +475,7 @@ async function chat(req, env, url, ctx) {
   const tStart = Date.now();
   const lurl = env.LLAMA_API_KEY ? await llamaUrl(env) : "";
   if (!lurl && (!env.MODEL_URL || !env.MODEL_KEY)) return json({ error: "모델이 아직 연결되지 않았어요", noModel: true }, 503);
+  const verSel = !lurl && env.ADMIN_KV ? String((await env.ADMIN_KV.get("config:model_version")) || "").slice(0, 40) : "";
   const u = await tokenUser(req, env);
   if (!u) return json({ error: "로그인이 필요해요" }, 401);
   const isAdmin = String(u.email || "").toLowerCase() === String(env.ADMIN_EMAIL || ADMIN_DEFAULT).toLowerCase() && !!u.emailVerified;
@@ -492,7 +514,7 @@ async function chat(req, env, url, ctx) {
         const rs = await fetch(env.MODEL_URL + "/ask_stream", {
           method: "POST", signal: acs.signal,
           headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
-          body: JSON.stringify({ q, sq, hist_txt: histTxt, max_new_tokens: maxTok }),
+          body: JSON.stringify({ q, sq, hist_txt: histTxt, max_new_tokens: maxTok, version: verSel }),
         });
         if (rs.ok && rs.body) {
           const enc = new TextEncoder(), dec = new TextDecoder();
@@ -538,7 +560,7 @@ async function chat(req, env, url, ctx) {
       const r0 = await fetch(env.MODEL_URL + "/ask", {
         method: "POST", signal: ac0.signal,
         headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
-        body: JSON.stringify({ q, sq, hist_txt: histTxt, max_new_tokens: maxTok }),
+        body: JSON.stringify({ q, sq, hist_txt: histTxt, max_new_tokens: maxTok, version: verSel }),
       });
       if (r0.ok) {
         const d0 = await r0.json();
@@ -646,7 +668,7 @@ async function chat(req, env, url, ctx) {
       const r = await fetch(env.MODEL_URL + "/generate", {
         method: "POST", signal: ac.signal,
         headers: { "content-type": "application/json", "x-key": env.MODEL_KEY, "user-agent": UA },
-        body: JSON.stringify({ system, user, max_new_tokens: maxTok }),
+        body: JSON.stringify({ system, user, max_new_tokens: maxTok, version: verSel }),
       });
       if (!r.ok) return json({ error: "모델이 응답하지 못했어요 (" + r.status + ")", modelDown: true }, 502);
       d = await r.json();
@@ -1391,17 +1413,17 @@ async function adminApi(req, env, ctx, url, raw) {
     let b = {}; if (req.method === "POST") { try { b = await req.json(); } catch {} }
     const sel = (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
     if (req.method === "POST" && (b.reload || b.version)) {
-      if (!base || !env.LLAMA_API_KEY) return json({ error: "서버 주소·키를 먼저 넣어 주세요" }, 400);
+      if (!hasBackend(env, base)) return json({ error: "서버 주소·키를 먼저 넣어 주세요" }, 400);
       const ver = b.reload ? sel : String(b.version || "");
       if (!VERS.some((x) => x.id === ver)) return json({ error: "없는 버전이에요" }, 400);
       loraKey = "";
-      const r = await loraApply(env, base, ver);
+      const r = await backendApply(env, base, ver);
       if (!r.ok) return json({ error: r.msg }, 502);
       await env.ADMIN_KV.put("config:model_version", ver);
       loraKey = base + "|" + ver;
     }
     const cur = (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
-    const st = base && env.LLAMA_API_KEY ? await loraState(env, base) : { ok: false, msg: "서버 주소·키가 없어요" };
+    const st = await backendState(env, base);
     return json({ ok: true, selected: cur, server: !!st.ok, msg: st.ok ? "" : st.msg, versions: VERS.map((v) => ({ id: v.id, label: v.label, note: v.note, loaded: !!(st.ok && st.loaded.includes(v.id)), active: cur === v.id })) });
   }
   if (p === "/api/admin/chatdata") {
@@ -1499,6 +1521,7 @@ export default {
           mail: !!env.RESEND_API_KEY,
           tasks: !!(saOf(env) && env.RESEND_API_KEY),
           wiki: true,
+          fonte: env.ADMIN_KV ? String((await env.ADMIN_KV.get("config:model_version")) || "").slice(0, 20) : "",
           model: !!(env.LLAMA_API_KEY && await llamaUrl(env)) || !!(env.MODEL_URL && env.MODEL_KEY),
         });
       }
