@@ -111,6 +111,18 @@ const VERS = [
   { id: "fonte_1.1", file: "fonte_1.1.gguf", label: "폰테 1.1", note: "자세한 FACT" },
   { id: "fonte_1.2", file: "fonte_1.2.gguf", label: "폰테 1.2", note: "MCP 도구" },
 ];
+// 켜 둔 버전들(on)과 기본 버전(def). 예전 설정(config:model_version 하나)도 그대로 읽어요.
+async function getVers(env) {
+  let sel = "fonte_1.0", on = null, def = "";
+  try {
+    const raw = await env.ADMIN_KV.get("config:model_versions");
+    if (raw) { const j = JSON.parse(raw); on = (Array.isArray(j.on) ? j.on : []).filter((x) => VERS.some((v) => v.id === x)); def = String(j.def || ""); }
+    else sel = (await env.ADMIN_KV.get("config:model_version")) || sel;
+  } catch {}
+  if (!on || !on.length) on = [VERS.some((v) => v.id === (def || sel)) ? (def || sel) : "fonte_1.0"];
+  if (!on.includes(def)) def = on[0];
+  return { on: VERS.map((v) => v.id).filter((id) => on.includes(id)), def };
+}
 const verOf = (path) => { const f = String(path || "").split(/[\\/]/).pop(); const x = VERS.find((v) => v.file === f); return x ? x.id : f; };
 async function loraFetch(env, base, method, body) {
   const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 8000);
@@ -155,9 +167,9 @@ async function backendApply(env, base, ver) {
 }
 let loraKey = "";
 // 서버가 새로 켜졌거나 고른 버전이 바뀌었으면 한 번만 맞춰 줘요 (같은 주소·버전이면 건너뛰어요)
-async function ensureLora(env, base) {
+async function ensureLora(env, base, ver) {
   try {
-    const ver = await env.ADMIN_KV.get("config:model_version"); if (!ver) return;
+    if (!ver) return;
     const key = base + "|" + ver; if (key === loraKey) return;
     const r = await loraApply(env, base, ver); if (r.ok) loraKey = key;
   } catch {}
@@ -166,7 +178,7 @@ async function ensureLora(env, base) {
 async function logChat(env, r) {
   try {
     if (!env.ADMIN_KV) return;
-    r.ver = (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
+    r.ver = r.ver || (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
     await env.ADMIN_KV.put("clog:" + String(9999999999999 - Date.now()).padStart(13, "0") + ":" + rid(), JSON.stringify(r), { expirationTtl: 14 * 86400 });
   } catch {}
 }
@@ -475,7 +487,6 @@ async function chat(req, env, url, ctx) {
   const tStart = Date.now();
   const lurl = env.LLAMA_API_KEY ? await llamaUrl(env) : "";
   if (!lurl && (!env.MODEL_URL || !env.MODEL_KEY)) return json({ error: "모델이 아직 연결되지 않았어요", noModel: true }, 503);
-  const verSel = !lurl && env.ADMIN_KV ? String((await env.ADMIN_KV.get("config:model_version")) || "").slice(0, 40) : "";
   const u = await tokenUser(req, env);
   if (!u) return json({ error: "로그인이 필요해요" }, 401);
   const isAdmin = String(u.email || "").toLowerCase() === String(env.ADMIN_EMAIL || ADMIN_DEFAULT).toLowerCase() && !!u.emailVerified;
@@ -484,6 +495,8 @@ async function chat(req, env, url, ctx) {
     if (m.banned || (m.tempBan && (m.bannedUntil || 0) > Date.now())) return json({ error: "사용이 제한된 계정이에요" }, 403);
   }
   let b = {}; try { b = await req.json(); } catch {}
+  const vs = env.ADMIN_KV ? await getVers(env) : { on: [], def: "" };
+  const verSel = vs.on.includes(String(b.fver || "")) ? String(b.fver) : vs.def;   // 사용자가 고른 버전(켜 둔 것만), 없으면 기본
   const q = String(b.q || "").trim().slice(0, 500);
   if (!q && (b.task === undefined || b.task === "ask" || b.task === "agent" || b.task === "code")) return json({ error: "질문을 적어 주세요" }, 400);
   if (env.ADMIN_KV && !isAdmin) {
@@ -619,7 +632,7 @@ async function chat(req, env, url, ctx) {
     const ans = String((d && d.answer) || "").replace(/https?:\/\/\S+/g, "(링크 확인 불가)").trim().slice(0, 4000);
     if (!ans) return null;
     const cited = [...new Set([...ans.matchAll(/\[(\d)\]/g)].map((m) => +m[1]))].filter((n) => n >= 1 && n <= refs.length);
-    if (ctx && !b.kid) ctx.waitUntil(logChat(env, { t: Date.now(), q: cap(b.q || b.message || "", 300), a: cap(ans, 1500), ms: Date.now() - tStart, task, news: newsMode }));
+    if (ctx && !b.kid) ctx.waitUntil(logChat(env, { t: Date.now(), q: cap(b.q || b.message || "", 300), a: cap(ans, 1500), ms: Date.now() - tStart, task, news: newsMode, ver: verSel }));
     return { answer: ans, task, sources: refs.map((x, i) => ({ n: i + 1, title: x.title, url: x.url, db: x.att ? "첨부" : (x.db || "위키백과"), publisher: x.publisher || "", date: x.date || "", cited: cited.includes(i + 1) })), refs: refs.length, ...(d && d.used && d.used.length ? { tools: d.used } : {}), ...(mcpList.fail && mcpList.fail.length ? { mcpErr: mcpList.fail } : {}), ...(refs.some((x) => x.db === "뉴스") ? { viaDb: true, dbs: ["뉴스"] } : {}) };
   };
   const newsAnswer = () => "관련 기사를 찾았어요.\n" + refs.map((x, i) => `${i + 1}. ${x.title} (${x.publisher}${x.date ? " " + x.date.slice(5) : ""}) [${i + 1}]`).join("\n");
@@ -630,7 +643,7 @@ async function chat(req, env, url, ctx) {
   if (b.lang === "en" && task !== "translate") { user += "\n\n(Answer in English only.)"; if (maxTok < 600) maxTok = 600; }
   // 뉴스 질문은 모델을 거치지 않고 (태블릿이 기사를 읽는 데 몇 분 걸려요) 바로 기사 목록을 보여 줘요 (빠르고 정확해요)
   if (newsMode && task === "ask") { const pl = payload({ answer: newsAnswer() }); if (pl) return json({ ...pl, direct: true }); }
-  if (lurl && !newsMode) await ensureLora(env, lurl);
+  if (lurl && !newsMode) await ensureLora(env, lurl, verSel);
   const mcpSrv = lurl && task === "ask" && !newsMode ? await userServers(env, u.localId) : [];
   const mcpList = mcpSrv.length ? await serverTools(mcpSrv) : [];
   const mcpOpts = { allow: new Set(mcpSrv.allow || []), ok: (Array.isArray(b.mcpOk) ? b.mcpOk : []).slice(0, 3).filter((x) => x && typeof x.tool === "string").map((x) => ({ tool: x.tool.slice(0, 100), args: x.args && typeof x.args === "object" ? x.args : {} })), no: (Array.isArray(b.mcpNo) ? b.mcpNo : []).slice(0, 5).map((x) => String(x).slice(0, 100)) };
@@ -1410,20 +1423,36 @@ async function adminApi(req, env, ctx, url, raw) {
   if (p === "/api/admin/model") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
     const base = await llamaUrl(env);
-    const sel = (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
-    if (req.method === "POST" && (b.reload || b.version)) {
+    const vs = await getVers(env);
+    const save = async () => { await env.ADMIN_KV.put("config:model_versions", JSON.stringify(vs)); await env.ADMIN_KV.put("config:model_version", vs.def); loraKey = ""; };
+    const order = (arr) => VERS.map((x) => x.id).filter((x) => arr.includes(x));
+    if (req.method === "POST" && (b.reload || b.version || b.toggle)) {
       if (!hasBackend(env, base)) return json({ error: "서버 주소·키를 먼저 넣어 주세요" }, 400);
-      const ver = b.reload ? sel : String(b.version || "");
-      if (!VERS.some((x) => x.id === ver)) return json({ error: "없는 버전이에요" }, 400);
-      loraKey = "";
-      const r = await backendApply(env, base, ver);
-      if (!r.ok) return json({ error: r.msg }, 502);
-      await env.ADMIN_KV.put("config:model_version", ver);
-      loraKey = base + "|" + ver;
+      const id = String(b.toggle || b.version || "");
+      if (!b.reload && !VERS.some((x) => x.id === id)) return json({ error: "없는 버전이에요" }, 400);
+      if (b.reload) {
+        const r = await backendApply(env, base, vs.def); if (!r.ok) return json({ error: r.msg }, 502);
+        loraKey = base + "|" + vs.def;
+      } else if (b.toggle) {                    // 켜고 끄기 (여러 개 가능)
+        const oldDef = vs.def;
+        if (vs.on.includes(id)) {
+          if (vs.on.length === 1) return json({ error: "하나는 켜 둬야 해요" }, 400);
+          vs.on = vs.on.filter((x) => x !== id); if (vs.def === id) vs.def = vs.on[0];
+        } else {
+          const st0 = await backendState(env, base); if (!st0.ok) return json({ error: st0.msg }, 502);
+          if (!st0.loaded.includes(id)) return json({ error: "서버에 그 버전이 올라와 있지 않아요" }, 409);
+          vs.on = order([...vs.on, id]);
+        }
+        if (vs.def !== oldDef) await backendApply(env, base, vs.def);
+        await save();
+      } else {                                  // 기본 버전으로 정하기 (꺼져 있으면 같이 켜요)
+        const r = await backendApply(env, base, id); if (!r.ok) return json({ error: r.msg }, 502);
+        vs.def = id; vs.on = order([...vs.on, id]);
+        await save(); loraKey = base + "|" + id;
+      }
     }
-    const cur = (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
     const st = await backendState(env, base);
-    return json({ ok: true, selected: cur, server: !!st.ok, msg: st.ok ? "" : st.msg, versions: VERS.map((v) => ({ id: v.id, label: v.label, note: v.note, loaded: !!(st.ok && st.loaded.includes(v.id)), active: cur === v.id })) });
+    return json({ ok: true, selected: vs.def, on: vs.on, server: !!st.ok, msg: st.ok ? "" : st.msg, versions: VERS.map((v) => ({ id: v.id, label: v.label, note: v.note, loaded: !!(st.ok && st.loaded.includes(v.id)), active: vs.def === v.id, on: vs.on.includes(v.id) })) });
   }
   if (p === "/api/admin/chatdata") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
@@ -1520,7 +1549,7 @@ export default {
           mail: !!env.RESEND_API_KEY,
           tasks: !!(saOf(env) && env.RESEND_API_KEY),
           wiki: true,
-          fonte: env.ADMIN_KV ? String((await env.ADMIN_KV.get("config:model_version")) || "").slice(0, 20) : "",
+          ...(env.ADMIN_KV ? await (async () => { const v = await getVers(env); return { fonte: v.def, fonteOn: v.on }; })() : {}),
           model: !!(env.LLAMA_API_KEY && await llamaUrl(env)) || !!(env.MODEL_URL && env.MODEL_KEY),
         });
       }

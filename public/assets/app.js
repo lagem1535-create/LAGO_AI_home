@@ -23,7 +23,8 @@ async function hash(s){try{const b=await crypto.subtle.digest("SHA-256",new Text
 
 /* ---------- data ---------- */
 const TALK_MODES=[{id:"Fonte",lab:"FACT",d:"위키 · 뉴스 · 웹에서 찾아 사실만 출처와 함께",ic:"drop",c:"#2BA3B8"},{id:"Torrente",lab:"빠른 생각",d:"짧게 생각하고 빠르게 답해요",ic:"waves",c:"#1B3E9E"},{id:"Mare",lab:"THINK",d:"깊게 생각하고 단계별로 추론",ic:"brain",c:"#4A5FA8"}];
-const mver=id=>{const f=S.api&&S.api.fonte;return id==="Fonte"&&/^fonte_\d+(\.\d+)*$/.test(f||"")?f.slice(6):"1.0";};
+const myFver=()=>{const on=(S.api&&S.api.fonteOn)||[];if(on.includes(S.fver))return S.fver;return (S.api&&S.api.fonte)||"";};
+const mver=id=>{const f=myFver();return id==="Fonte"&&/^fonte_\d+(\.\d+)*$/.test(f||"")?f.slice(6):"1.0";};
 const modeOf=id=>[...TALK_MODES,...CODE_MODES].find(m=>m.id===id)||TALK_MODES[0];
 const LIMITS={Free:80000,Pro:600000,Max:4000000};
 const CODE_MODES=[{id:"Code Spruzzo",lab:"빠른 CODE",d:"설명 없이 바로 코드",ic:"bolt",c:"#1F8A4C"},{id:"Code Corrente",lab:"CODE",d:"설계부터 생각하고 더 나은 코드",ic:"code",c:"#1F8A4C"}];
@@ -238,6 +239,7 @@ function discText(code){return S.goccia?`${ic("info",13)} 보호자와 연결된
 /* ---------- composer ---------- */
 function composer(ph){const code=S.area==="code";const modes=code?CODE_MODES:TALK_MODES;const cur=code?S.cmode:S.mode;const cm=modeOf(cur);
 const pop=S.menu?`<div class="pop" role="dialog" aria-label="모델 고르기"><div class="hint" style="padding:6px 10px">모델</div>${modes.map(m=>`<button class="opt ${m.id===cur?"on":""}" data-mode="${m.id}"><span class="mi" style="background:${m.c}22;color:${m.c}">${ic(m.ic,18)}</span><span class="grow"><b>${m.lab}</b><span class="ver">${m.id} ${mver(m.id)}</span><small>${m.d}</small></span>${m.id===cur?`<span style="color:${m.c}">${ic("check",18)}</span>`:""}</button>`).join("")}
+${!code&&cur==="Fonte"&&((S.api&&S.api.fonteOn)||[]).length>1?`<div style="height:1px;background:#EEF2F8;margin:6px 4px"></div><div class="popsec"><div class="row">${ic("drop",15)} 폰테 버전</div><div class="seg">${S.api.fonteOn.map(id=>`<button aria-pressed="${myFver()===id}" data-fver="${id}">${esc(id.replace("fonte_",""))}</button>`).join("")}</div></div>`:""}
 ${(code||cur==="Mare")?`<div style="height:1px;background:#EEF2F8;margin:6px 4px"></div><div class="popsec"><div class="row">${ic("brain",15)} 생각 강도</div><div class="seg">${["낮게","보통","깊게"].map((t,i)=>`<button aria-pressed="${S.think===i}" data-think="${i}">${t}</button>`).join("")}</div></div>`:""}</div>`:"";
 const connPop=S.conn?`<div class="pop connpop" role="dialog" aria-label="커넥터"><div class="hint" style="padding:6px 10px">연결된 서비스 (MCP)</div>${(()=>{if(!S.mcp)mcpLoad();const on=mcpOn().map(x=>[x.name,"#4A5FA8"]);return on.length?on.map(x=>`<div class="opt" style="cursor:default"><span class="svcico sm" style="background:${x[1]}">${esc(x[0].slice(0,1))}</span><span class="grow"><b>${esc(x[0])}</b></span><span style="color:var(--g)">${ic("check",16)}</span></div>`).join(""):`<p class="muted" style="margin:0;padding:6px 10px 10px;font-size:13px">켜 둔 MCP가 없어요.</p>`;})()}<div style="height:1px;background:#EEF2F8;margin:6px 4px"></div><button type="button" class="opt" data-go="services">${ic("plug",17)}<span class="grow"><b>서비스 연결 열기</b></span>${ic("right",14)}</button></div>`:"";
 return `<form class="composer" id="composer">${pop}${connPop}${S.plus&&!S.goccia?plusPop():""}<textarea id="q" rows="1" placeholder="${esc(ph)}" aria-label="메시지"></textarea>
@@ -369,13 +371,13 @@ function stageSet(t){document.querySelectorAll("[data-think] .tstage").forEach(e
 /* ---------- 관리자 슬래시 명령: /mode_change /update /chatdata ---------- */
 const ADMCMD=/^\/(mode_change|model_change|update|chatdata)\b/i;
 async function admApi(path,body){const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/admin/"+path,{method:"POST",headers:{authorization:"Bearer "+tk,"content-type":"application/json"},body:JSON.stringify(body||{}),cache:"no-store"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||("오류 "+r.status));return d;}
-function admModelHtml(d,note){const rows=d.versions.map(v=>`<button class="btn sm" style="justify-content:flex-start;gap:10px;width:100%;${v.active?"border-color:var(--blue)":""}" data-act="admver" data-v="${esc(v.id)}"${v.loaded||v.active?"":""}><b style="font-family:monospace">${v.active?"[V]":"[ ]"}</b> ${esc(v.label)} <span class="muted" style="font-size:12px">${esc(v.note)}${d.server?(v.loaded?" · 서버에 올라와 있어요":" · 서버에 없어요"):""}</span></button>`).join("");
-return `<p class="answer"><b>모델 선택</b> — 누르면 바로 바뀌어요</p><div style="display:grid;gap:8px;max-width:420px;margin:8px 0">${rows}</div><p class="muted" style="font-size:13px">${d.server?"":esc(d.msg||"서버에 연결하지 못했어요")+"<br>"}${note?esc(note)+"<br>":""}새 버전 파일은 태블릿에서 <code>bash ~/lago.sh update</code> 후 /update 를 입력하면 반영돼요.</p>`;}
+function admModelHtml(d,note){const rows=d.versions.map(v=>`<div class="row" style="gap:8px;width:100%"><button class="btn sm grow" style="justify-content:flex-start;gap:10px;${v.on?"border-color:var(--blue)":""}" data-act="admver" data-v="${esc(v.id)}"><b style="font-family:monospace">${v.on?"[V]":"[ ]"}</b> ${esc(v.label)} <span class="muted" style="font-size:12px">${esc(v.note)}${d.server?(v.loaded?" · 서버에 올라와 있어요":" · 서버에 없어요"):""}</span></button>${v.on?`<button class="btn sm" data-act="admdef" data-v="${esc(v.id)}" ${v.active?"disabled":""}>${v.active?"기본":"기본으로"}</button>`:""}</div>`).join("");
+return `<p class="answer"><b>모델 선택</b> — 눌러서 켜고 끄세요 (여러 개 가능)</p><div style="display:grid;gap:8px;max-width:460px;margin:8px 0">${rows}</div><p class="muted" style="font-size:13px">${d.server?"":esc(d.msg||"서버에 연결하지 못했어요")+"<br>"}${note?esc(note)+"<br>":""}켜 둔 버전은 사용자가 모델 목록에서 고를 수 있어요. <b>기본</b>은 고르지 않았을 때 쓰는 버전이에요.<br>새 버전 파일은 태블릿에서 <code>bash ~/lago.sh update</code> 후 /update 를 입력하면 반영돼요.</p>`;}
 async function admCmd(text,am){if(S.isAdmin===undefined){try{await meCheck();}catch(e){}}const cmd=text.trim().toLowerCase().split(/\s+/)[0].replace("/model_change","/mode_change");const fin=(html,plain)=>{am.loading=false;am.html=html;am.plain=plain||"";am.meta="관리자 명령";save();render();};
 try{
 if(!S.isAdmin){fin(`<p class="answer">관리자 계정으로 로그인했을 때만 쓸 수 있는 명령이에요.</p>`,"관리자 전용");return;}
 if(cmd==="/mode_change"){const d=await admApi("model");fin(admModelHtml(d),"모델 선택");}
-else if(cmd==="/update"){const d=await admApi("model",{reload:true});if(S.api)S.api.fonte=d.selected;const a=d.versions.find(v=>v.active);fin(`<p class="answer"><b>모델을 다시 불러왔어요</b><br>쓰는 버전: ${esc(a?a.label:d.selected)}<br>서버에 올라온 버전: ${esc(d.versions.filter(v=>v.loaded).map(v=>v.label).join(", ")||"없음")}</p>`,"다시 불러옴");}
+else if(cmd==="/update"){const d=await admApi("model",{reload:true});if(S.api){S.api.fonte=d.selected;S.api.fonteOn=d.on;}const a=d.versions.find(v=>v.active);fin(`<p class="answer"><b>모델을 다시 불러왔어요</b><br>쓰는 버전: ${esc(a?a.label:d.selected)}<br>서버에 올라온 버전: ${esc(d.versions.filter(v=>v.loaded).map(v=>v.label).join(", ")||"없음")}</p>`,"다시 불러옴");}
 else{const d=await admApi("chatdata?n=20");const kst=t=>new Date(t+9*3600e3).toISOString().slice(5,16).replace("T"," ");
 const rows=d.items.map(x=>`<details style="border-top:1px solid var(--line,#e5e7eb);padding:8px 0"><summary style="cursor:pointer"><span class="muted" style="font-size:12px">${kst(x.t)} · ${(x.ms/1000).toFixed(1)}초 · ${esc(x.ver||"")}${x.news?" · 뉴스":""}</span><br><b>${esc(x.q)}</b></summary><div style="white-space:pre-wrap;margin:6px 0 0;font-size:14px">${esc(x.a)}</div></details>`).join("");
 fin(`<p class="answer"><b>최근 대화 ${d.items.length}개</b> <span class="muted" style="font-size:12px">(질문 · 답 · 걸린 시간, 14일 뒤 지워져요)</span></p>${d.items.length?rows:'<p class="muted">아직 기록이 없어요. 이 기능을 켠 뒤의 대화부터 쌓여요.</p>'}`,"대화 기록");}
@@ -386,7 +388,7 @@ if(S.api.publicData&&/공휴일|휴일|쉬는\s*날|빨간\s*날/.test(q)){const
 const r=await fetch(`/api/holidays?year=${yy}&month=${mm}`);const d=await r.json();if(!r.ok)throw 0;
 const list=d.items.length?`<ul style="margin:6px 0 0;padding-left:20px">${d.items.map(i=>`<li>${i.date.slice(4,6)*1}월 ${i.date.slice(6)*1}일 · ${esc(i.name)}</li>`).join("")}</ul>`:"<br>이 달에는 공휴일이 없어요.";
 return{html:`<span class="status">${ic("globe",14)} 공공데이터 1개 찾음</span><p class="answer">${yy}년 ${mm}월 공휴일이에요 <span class="cite">[1]</span>.${list}</p><div class="srcs">${srcCard(1,"한국천문연구원 특일 정보","공공데이터포털 · data.go.kr","https://www.data.go.kr")}</div>`,plain:`${yy}년 ${mm}월 공휴일 ${d.items.length}개`,meta:modeOf(S.mode).lab+" · 공공데이터"};}
-if(S.api.model&&S.fb&&S.fb.auth.currentUser){try{const tok=await S.fb.auth.currentUser.getIdToken();const cr=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify({lang:S.lang==="en"?"en":undefined,q,hist,stream:true,ctx:ctx||undefined,mcpOk:mo&&mo.ok&&mo.ok.length?mo.ok:undefined,mcpNo:mo&&mo.no&&mo.no.length?mo.no:undefined})});let cd;
+if(S.api.model&&S.fb&&S.fb.auth.currentUser){try{const tok=await S.fb.auth.currentUser.getIdToken();const cr=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tok},body:JSON.stringify({lang:S.lang==="en"?"en":undefined,fver:myFver()||undefined,q,hist,stream:true,ctx:ctx||undefined,mcpOk:mo&&mo.ok&&mo.ok.length?mo.ok:undefined,mcpNo:mo&&mo.no&&mo.no.length?mo.no:undefined})});let cd;
 if((cr.headers.get("content-type")||"").includes("ndjson")&&cr.body){cd={error:"끊겼어요"};const rd=cr.body.getReader(),dc=new TextDecoder();let bf="";for(;;){const {done,value}=await rd.read();if(value)bf+=dc.decode(value,{stream:true});let i;while((i=bf.indexOf("\n"))>=0){const ln=bf.slice(0,i).trim();bf=bf.slice(i+1);if(!ln)continue;let m;try{m=JSON.parse(ln);}catch(e){continue;}
 if(m.t==="refs"){stageSet(m.refs.length?"자료 "+m.refs.length+"개 읽는 중":"자료 없이 답하는 중");peekSet(m.refs.length?"찾은 자료: "+m.refs.slice(0,4).map(x=>"<b>"+esc(x.db)+"</b> "+esc((x.title||"").slice(0,18))).join(" · ")+(m.refs.length>4?" 외 "+(m.refs.length-4)+"개":""):"찾은 자료가 없어요");}
 else if(m.t==="done"||m.t==="pending")cd=m;else if(m.t==="error")cd={error:m.error};}if(done)break;}
@@ -961,6 +963,7 @@ if(d.cat){S.agentCat=d.cat;render();return;}
 if(d.agic){readDraft();S.draft.ic=d.agic;render();return;}
 if(d.agcol){readDraft();S.draft.c=d.agcol;render();return;}
 if(d.mode){if(S.area==="code")S.cmode=d.mode;else S.mode=d.mode;S.menu=false;save();render();return;}
+if(d.fver){S.fver=d.fver;store.set("lago_fver",d.fver);render();return;}
 if(d.think){S.think=+d.think;save();render();return;}
 if(d.web){S.web=+d.web;save();render();return;}
 if(d.plan&&S.fb){toast(d.plan==="Free"?"지금은 Free 요금제예요":"결제는 아직 열리지 않았어요. 열리면 알려 드릴게요.");return;}
@@ -968,7 +971,7 @@ if(d.plan){S.user.plan=d.plan;if(S.user.uid)fbSave(true);else store.set("lago_se
 if(d.sw){const k=d.sw;S[k]=k==="kStudy"?S[k]!==true:!(S[k]!==false);if(k==="learn"||k==="learnImg"){toast(S[k]?"켰어요":"껐어요. 이제부터의 대화는 학습에 쓰지 않아요.");}save();render();return;}
 if(d.todo!=null&&t.tagName==="INPUT")return;
 switch(d.act){
-case"admver":{const el=t.closest("[data-v]");const v=el&&el.dataset.v;if(!v||!S.isAdmin)break;el.disabled=true;admApi("model",{version:v}).then(d=>{if(S.api)S.api.fonte=d.selected;const m=S.chats.flatMap(c=>c.msgs).find(x=>x.html&&x.html.includes("data-act=\"admver\""));if(m){m.html=admModelHtml(d,"바꿨어요: "+(d.versions.find(x=>x.active)||{}).label);}render();}).catch(e=>{el.disabled=false;toast("바꾸지 못했어요: "+(e.message||e));});break;}
+case"admver":case"admdef":{const el=t.closest("[data-v]");const v=el&&el.dataset.v;if(!v||!S.isAdmin)break;el.disabled=true;admApi("model",d.act==="admdef"?{version:v}:{toggle:v}).then(r=>{if(S.api){S.api.fonte=r.selected;S.api.fonteOn=r.on;}const m=S.chats.flatMap(c=>c.msgs).find(x=>x.html&&x.html.includes("data-act=\"admver\""));if(m){m.html=admModelHtml(r,"켜 둔 버전: "+r.versions.filter(x=>x.on).map(x=>x.label).join(", ")+" · 기본: "+((r.versions.find(x=>x.active)||{}).label||""));}render();}).catch(e=>{el.disabled=false;toast("바꾸지 못했어요: "+(e.message||e));});break;}
 case"replay":brandStage&&brandStage.play();break;
 case"demo":S.user={...DEMO};store.set("lago_session",S.user);loadUser();toast("예시 계정으로 들어왔어요");go("home");break;
 case"google":{const bl=fbBlock();if(bl){const m=$("#lerr")||$("#jerr");if(m)m.textContent=bl;else toast(bl);break;}}if(S.fb){try{await S.fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){const m=$("#lerr")||$("#jerr");if(m)m.textContent=fbMsg(e);else toast(fbMsg(e));}break;}toast("Google 로그인은 실제 서비스에서 연결돼요. 지금은 예시 계정으로 들어갈게요.");S.user={...DEMO};store.set("lago_session",S.user);loadUser();go("home");break;
@@ -1372,7 +1375,7 @@ return `<div class="tempask" role="dialog" aria-label="업데이트 마법사"><
 if(DESK&&DESK.onUpd)DESK.onUpd((k,x)=>{if(k==="avail"){if(store.get("lago_upd_skip","")!==x.latest&&!S.upw)upwOpen(x);}else if(k==="open")upwCheck(true);else if(k==="progress"&&S.upw&&S.upw.step==="down"){S.upw.pct=x.pct;S.upw.done=x.done;S.upw.total=x.total;const b=document.getElementById("upwbar"),t=document.getElementById("upwtxt");if(b)b.style.width=x.pct+"%";if(t)t.textContent=x.pct+"% · "+mbs(x.done)+" / "+mbs(x.total);}});
 /* ---------- boot ---------- */
 initSet();applySet();S.theme=store.get("lago_theme","light");S.lang=store.get("lago_lang","ko");applyTheme();document.documentElement.setAttribute("lang",S.lang);try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(S.theme==="system")applyTheme();});}catch(e){}
-S.sideOff=store.get("lago_sideoff",false)===true;{const _r=render;render=function(){_r();fixPops();trUI();};}
+S.sideOff=store.get("lago_sideoff",false)===true;S.fver=store.get("lago_fver","")||"";{const _r=render;render=function(){_r();fixPops();trUI();};}
 /* 서버가 정한 정지/요금제/한도를 불러와요. 5분마다, 그리고 탭으로 돌아올 때 다시 확인해요. */
 async function meCheck(){if(!S.fb||!S.user||!S.user.uid||!S.api)return;
 try{const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/me",{headers:{authorization:"Bearer "+tk},cache:"no-store"});if(!r.ok)return;const m=await r.json();
