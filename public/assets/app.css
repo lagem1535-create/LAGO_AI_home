@@ -822,6 +822,32 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(17,26,5
 @media (max-width:760px){.top:has(.renamef.top) .mwm{display:none}.top>.renamef.top{max-width:none}}
 .renamef.top input{flex:1 1 auto;min-width:0;width:100%}
 @media (max-width:760px){.main .scroll{padding-top:calc(62px + env(safe-area-inset-top,0px))}.main .preview{padding-top:calc(62px + env(safe-area-inset-top,0px))}.main>.top{padding-top:calc(12px + env(safe-area-inset-top,0px))}}
+/* ==SHARE== 대화 공유 */
+.sharecard{gap:12px}
+.shinv{display:flex;gap:8px;align-items:center}
+.shinv input{flex:1;min-width:0}
+.shsec{font-size:12.5px;font-weight:600;color:var(--mut,#64748B);margin-top:2px}
+.shcur,.shopt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:none;padding:8px 6px;border-radius:12px;color:inherit}
+.shcur:hover,.shopt:hover{background:var(--mist)}
+.shcur b,.shopt b,.shp b{display:block;font-size:14.5px;font-weight:600}
+.shcur small,.shopt small,.shp small{display:block;color:var(--mut,#64748B);font-size:12.5px;line-height:1.45}
+.shico{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--mist);color:var(--blue)}
+.shico.link{background:#E6F4EC;color:#15803D}.shico.emails{background:#FFF4E0;color:#B45309}
+.shopt .shico{width:34px;height:34px}
+.shopt.on{background:var(--mist)}
+.shopts{display:grid;gap:2px;border:1px solid var(--line);border-radius:14px;padding:4px}
+.chev{display:inline-flex;transition:transform .25s ease;color:var(--mut,#64748B)}.chev.flip{transform:rotate(180deg)}
+.shpeople{display:grid;gap:2px;border-top:1px solid var(--line);padding-top:8px}
+.shp{display:flex;align-items:center;gap:12px;padding:6px 6px}
+.shav{width:40px;height:40px;font-size:15px;background:var(--blue);color:#fff}
+.shav.alt{background:#E3E8F3;color:var(--ink2)}
+.shwarn{font-size:12.5px;line-height:1.6;margin:0;background:var(--bg);border-radius:10px;padding:9px 12px}
+.shgear{border-top:1px solid var(--line);padding-top:4px;display:grid}
+.shfoot{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.shgearbtn{width:42px;height:42px;border-radius:12px;background:var(--bg)}.shgearbtn.on{background:var(--mist);color:var(--blue)}
+.shcopy{min-width:140px;padding:11px 20px;border-radius:13px}
+.shcopy svg{margin-right:2px}
+.shcur[aria-expanded=true] small{display:none}
 /* ==DARK-GEN-START== */
 
 :root[data-lago=dark]{color-scheme:dark;--bg:#14161C;--card:#1D2028;--side:#181B21;--line:#2E3441;--ink:#E7EAF3;--ink2:#C5CBDA;--mut:#9CA5BA;--mut2:#8A93A9;--mut3:#7B849A;--blue:#8FAAF5;--sky:#7FA2FF;--mist:#212A45;--sel:#283766;--gbg:#14201A;--gt:#1B2E24;--gline:#27402F;--gside:#17241D;--kt:#16293B;--warnbg:#33231B;--g:#4CC585;--gd:#BDE8D0;--kd:#8CC6F2;--err:#F07468;--warn:#E08A62}
@@ -1023,6 +1049,13 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(17,26,5
 :root[data-lago=dark] .err-t{color:#E8837D}
 :root[data-lago=dark] .tag.on{background:#3B62D6}
 @media (max-width:760px){:root[data-lago=dark] .pop,:root[data-lago=dark] .cmenu,:root[data-lago=dark] .acct,:root[data-lago=dark] .confirm{background:var(--card,#212121)}:root[data-lago=dark] .pop::before,:root[data-lago=dark] .cmenu::before,:root[data-lago=dark] .acct::before,:root[data-lago=dark] .confirm::before{background:#333A48}:root[data-lago=dark] .tempask>.card::before,:root[data-lago=dark] .tempask>form::before,:root[data-lago=dark] .tempask>div:not(.noticebg)::before{background:#333A48}}
+:root[data-lago=dark] .shsec{color:var(--mut,#A6B0BF)}
+:root[data-lago=dark] .shcur small,:root[data-lago=dark] .shopt small,:root[data-lago=dark] .shp small{color:var(--mut,#A6B0BF)}
+:root[data-lago=dark] .shico.link{background:#283B30;color:#80E9A7}
+:root[data-lago=dark] .shico.emails{background:#393225;color:#E8AB7D}
+:root[data-lago=dark] .chev{color:var(--mut,#A6B0BF)}
+:root[data-lago=dark] .shav{background:#3B62D6}
+:root[data-lago=dark] .shav.alt{background:#292F3D}
 :root[data-lago=dark] [style*="background:#fde8e4" i],:root[data-lago=dark] [style*="background: #fde8e4" i]{background:#382724 !important}
 :root[data-lago=dark] [style*="color:#c0392b" i],:root[data-lago=dark] [style*="color: #c0392b" i]{color:#E38B82 !important}
 :root[data-lago=dark] [style*="background:#eef2f8" i],:root[data-lago=dark] [style*="background: #eef2f8" i]{background:#232A35 !important}
