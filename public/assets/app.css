@@ -848,6 +848,8 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(17,26,5
 .shcopy{min-width:140px;padding:11px 20px;border-radius:13px}
 .shcopy svg{margin-right:2px}
 .shcur[aria-expanded=true] small{display:none}
+.shlink{display:flex;gap:8px;align-items:center}.shlink input{flex:1;min-width:0;font:13px var(--mono)}
+.shembed{justify-self:start}
 /* ==DARK-GEN-START== */
 
 :root[data-lago=dark]{color-scheme:dark;--bg:#14161C;--card:#1D2028;--side:#181B21;--line:#2E3441;--ink:#E7EAF3;--ink2:#C5CBDA;--mut:#9CA5BA;--mut2:#8A93A9;--mut3:#7B849A;--blue:#8FAAF5;--sky:#7FA2FF;--mist:#212A45;--sel:#283766;--gbg:#14201A;--gt:#1B2E24;--gline:#27402F;--gside:#17241D;--kt:#16293B;--warnbg:#33231B;--g:#4CC585;--gd:#BDE8D0;--kd:#8CC6F2;--err:#F07468;--warn:#E08A62}

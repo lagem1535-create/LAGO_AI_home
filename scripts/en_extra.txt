@@ -192,3 +192,9 @@ IP와 대략적인 지역은 접속할 때마다 서버가 남겨요. 90일 동�
 먼저 위 칸에 이메일을 추가해 주세요=>Add an email above first
 이미 추가한 사람이에요=>Already added
 10명까지 추가할 수 있어요=>Up to 10 people
+링크를 아는 사람은 누구나 열 수 있어요=>Anyone with the link can open it
+링크를 열고 로그인한 사람은 쓸 수 있어요=>Anyone who opens the link and signs in can use it
+메일은 링크를 전해 주는 용도예요=>The email is just to deliver the link
+그 주소로 로그인한 사람만 열 수 있어요=>Only people signed in with that email can open it
+퍼가기 코드(iframe) 복사=>Copy embed code (iframe)
+처리하는 중…=>Working…
