@@ -1410,7 +1410,6 @@ async function adminApi(req, env, ctx, url, raw) {
   if (p === "/api/admin/model") {
     if (!env.ADMIN_KV) return json({ error: "ADMIN_KV가 연결되지 않았어요" }, 503);
     const base = await llamaUrl(env);
-    let b = {}; if (req.method === "POST") { try { b = await req.json(); } catch {} }
     const sel = (await env.ADMIN_KV.get("config:model_version")) || "fonte_1.0";
     if (req.method === "POST" && (b.reload || b.version)) {
       if (!hasBackend(env, base)) return json({ error: "서버 주소·키를 먼저 넣어 주세요" }, 400);
