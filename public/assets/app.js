@@ -367,11 +367,11 @@ if(r.status===429||r.status===403)return{html:`<p class="answer">${esc(r.d.error
 function peekSet(t){document.querySelectorAll("[data-peek]").forEach(e=>{e.innerHTML=t;e.hidden=!t;});}
 function stageSet(t){document.querySelectorAll("[data-think] .tstage").forEach(e=>e.textContent=t);}
 /* ---------- 관리자 슬래시 명령: /mode_change /update /chatdata ---------- */
-const ADMCMD=/^\/(mode_change|update|chatdata)\b/i;
+const ADMCMD=/^\/(mode_change|model_change|update|chatdata)\b/i;
 async function admApi(path,body){const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/admin/"+path,{method:"POST",headers:{authorization:"Bearer "+tk,"content-type":"application/json"},body:JSON.stringify(body||{}),cache:"no-store"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||("오류 "+r.status));return d;}
 function admModelHtml(d,note){const rows=d.versions.map(v=>`<button class="btn sm" style="justify-content:flex-start;gap:10px;width:100%;${v.active?"border-color:var(--blue)":""}" data-act="admver" data-v="${esc(v.id)}"${v.loaded||v.active?"":""}><b style="font-family:monospace">${v.active?"[V]":"[ ]"}</b> ${esc(v.label)} <span class="muted" style="font-size:12px">${esc(v.note)}${d.server?(v.loaded?" · 서버에 올라와 있어요":" · 서버에 없어요"):""}</span></button>`).join("");
 return `<p class="answer"><b>모델 선택</b> — 누르면 바로 바뀌어요</p><div style="display:grid;gap:8px;max-width:420px;margin:8px 0">${rows}</div><p class="muted" style="font-size:13px">${d.server?"":esc(d.msg||"서버에 연결하지 못했어요")+"<br>"}${note?esc(note)+"<br>":""}새 버전 파일은 태블릿에서 <code>bash ~/lago.sh update</code> 후 /update 를 입력하면 반영돼요.</p>`;}
-async function admCmd(text,am){if(S.isAdmin===undefined){try{await meCheck();}catch(e){}}const cmd=text.trim().toLowerCase().split(/\s+/)[0];const fin=(html,plain)=>{am.loading=false;am.html=html;am.plain=plain||"";am.meta="관리자 명령";save();render();};
+async function admCmd(text,am){if(S.isAdmin===undefined){try{await meCheck();}catch(e){}}const cmd=text.trim().toLowerCase().split(/\s+/)[0].replace("/model_change","/mode_change");const fin=(html,plain)=>{am.loading=false;am.html=html;am.plain=plain||"";am.meta="관리자 명령";save();render();};
 try{
 if(!S.isAdmin){fin(`<p class="answer">관리자 계정으로 로그인했을 때만 쓸 수 있는 명령이에요.</p>`,"관리자 전용");return;}
 if(cmd==="/mode_change"){const d=await admApi("model");fin(admModelHtml(d),"모델 선택");}
