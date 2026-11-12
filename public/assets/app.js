@@ -1412,7 +1412,7 @@ document.addEventListener("touchend",end);document.addEventListener("touchcancel
 document.addEventListener("click",e=>{if(e.target===document.body&&document.body.classList.contains("sheet-open")&&S.confirm){S.confirm=null;render();}},true);
 })();
 /* 위로 스크롤하면 윗줄이 부드럽게 조금 더 진해져요 */
-document.addEventListener("scroll",e=>{const t=e.target;if(!t||!t.classList||!t.classList.contains("scroll"))return;const h=t.parentElement&&t.parentElement.querySelector(":scope>.top");if(h)h.classList.toggle("lift",t.scrollTop>6);},true);
+document.addEventListener("scroll",e=>{const t=e.target;if(!t||!t.classList||!t.classList.contains("scroll"))return;const m=t.closest(".main"),h=m&&m.querySelector(":scope>.top");if(h)h.classList.toggle("lift",t.scrollTop>6);},true);
 addEventListener("pointermove",e=>{const b=document.querySelector(".brand");if(!b)return;b.style.setProperty("--mx",((e.clientX/innerWidth)*2-1).toFixed(2));b.style.setProperty("--my",((e.clientY/innerHeight)*2-1).toFixed(2));},{passive:true});
 setInterval(()=>{meCheck();secPing();},300000);document.addEventListener("visibilitychange",()=>{if(!document.hidden){meCheck();secPing();}});
 function vBanned(){const b=S.banned||{};let left="";if(b.until){const m=Math.max(1,Math.ceil((b.until-Date.now())/60000));left=m>=60?Math.floor(m/60)+"시간 "+(m%60)+"분":m+"분";}
