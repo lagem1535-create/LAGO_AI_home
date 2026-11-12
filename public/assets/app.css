@@ -816,6 +816,9 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(17,26,5
 .main>.top.lift{--topa:58%;border-bottom-color:rgba(120,140,190,.18);box-shadow:0 6px 24px rgba(11,31,85,.06)}
 .main>.top.lift::before{-webkit-backdrop-filter:blur(26px) saturate(1.9);backdrop-filter:blur(26px) saturate(1.9)}
 .main .scroll{padding-top:62px;scroll-padding-top:70px}.main .preview{padding-top:62px}
+/* 임시 대화: 어두운 안내 줄이 위에, 흐린 윗줄은 그 아래에 */
+.main.temp>.top{top:var(--tbh,40px)}
+.main.temp>.tempbar{z-index:31}
 .main>.top .pill,.main>.top .codebadge,.main>.top .iconbtn{transition:background-color .35s ease,border-color .35s ease,color .35s ease}
 /* 제목 이름 바꾸기: 좁은 화면에서 바깥으로 밀려 나가지 않게 */
 .top>.renamef.top{flex:100 1 0;min-width:0;max-width:360px}

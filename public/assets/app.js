@@ -1430,7 +1430,7 @@ setInterval(()=>document.querySelectorAll("[data-think]").forEach(e=>{const t0=+
 /* ---------- 모바일 바텀시트: 배경 어둡게 + 아래로 끌어 닫기 ---------- */
 (function(){const SH=".pop,.acct:not(.acctwrap),.cmenu,.confirm,.tempask>.card,.tempask>form,.tempask>div:not(.noticebg)";let raf=0;
 const mob=()=>matchMedia("(max-width:760px)").matches;
-const upd=()=>{raf=0;const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);document.body.classList.remove("sheet-side");
+const upd=()=>{raf=0;const mm=document.querySelector(".main.temp"),tb=mm&&mm.querySelector(":scope>.tempbar");if(mm){const h=tb?tb.offsetHeight:0;if(mm.style.getPropertyValue("--tbh")!==h+"px")mm.style.setProperty("--tbh",h+"px");}const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);document.body.classList.remove("sheet-side");
 if(on){const sh=document.querySelector(".pop,.acct,.cmenu,.confirm");if(sh){const r=sh.getBoundingClientRect(),el=document.elementFromPoint(r.left+r.width/2,Math.min(innerHeight-4,r.top+Math.min(r.height/2,40)));
 /* 윗줄·사이드바처럼 층이 낮은 곳 안에 있는 시트는 배경 막이 위를 덮어 버려요 → 막을 끄고 시트 자체의 큰 그림자로 어둡게 */
 if(el&&!sh.contains(el))document.body.classList.add("sheet-side");}}};
