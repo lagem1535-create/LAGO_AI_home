@@ -190,6 +190,7 @@
 
   document.querySelectorAll("#mode button").forEach((b) => (b.onclick = () => {
     mode = b.dataset.m;
+    document.body.classList.toggle("code", mode === "code");
     document.querySelectorAll("#mode button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     q.placeholder = mode === "code" ? "만들고 싶은 코드를 말해 주세요" : "LAGO에게 물어보세요";
   }));

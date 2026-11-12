@@ -1402,7 +1402,7 @@ setInterval(()=>document.querySelectorAll("[data-think]").forEach(e=>{const t0=+
 /* ---------- 모바일 바텀시트: 배경 어둡게 + 아래로 끌어 닫기 ---------- */
 (function(){const SH=".pop,.acct:not(.acctwrap),.cmenu,.confirm,.tempask>.card,.tempask>form,.tempask>div:not(.noticebg)";let raf=0;
 const mob=()=>matchMedia("(max-width:760px)").matches;
-const upd=()=>{raf=0;const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);};
+const upd=()=>{raf=0;const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);document.body.classList.toggle("sheet-side",on&&!!document.querySelector(".side .cmenu,.side .acct,.side .pop"));};
 new MutationObserver(()=>{if(!raf)raf=requestAnimationFrame(upd);}).observe(document.getElementById("app")||document.body,{childList:true,subtree:true});
 let t=null;
 document.addEventListener("touchstart",e=>{if(!mob())return;const el=e.target.closest(SH);if(!el)return;const r=el.getBoundingClientRect(),y=e.touches[0].clientY;if(y-r.top>40)return;t={el,y0:y,dy:0};el.style.transition="none";},{passive:true});
