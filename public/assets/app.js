@@ -1402,7 +1402,10 @@ setInterval(()=>document.querySelectorAll("[data-think]").forEach(e=>{const t0=+
 /* ---------- 모바일 바텀시트: 배경 어둡게 + 아래로 끌어 닫기 ---------- */
 (function(){const SH=".pop,.acct:not(.acctwrap),.cmenu,.confirm,.tempask>.card,.tempask>form,.tempask>div:not(.noticebg)";let raf=0;
 const mob=()=>matchMedia("(max-width:760px)").matches;
-const upd=()=>{raf=0;const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);document.body.classList.toggle("sheet-side",on&&!!document.querySelector(".side .cmenu,.side .acct,.side .pop"));};
+const upd=()=>{raf=0;const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);document.body.classList.remove("sheet-side");
+if(on){const sh=document.querySelector(".pop,.acct,.cmenu,.confirm");if(sh){const r=sh.getBoundingClientRect(),el=document.elementFromPoint(r.left+r.width/2,Math.min(innerHeight-4,r.top+Math.min(r.height/2,40)));
+/* 윗줄·사이드바처럼 층이 낮은 곳 안에 있는 시트는 배경 막이 위를 덮어 버려요 → 막을 끄고 시트 자체의 큰 그림자로 어둡게 */
+if(el&&!sh.contains(el))document.body.classList.add("sheet-side");}}};
 new MutationObserver(()=>{if(!raf)raf=requestAnimationFrame(upd);}).observe(document.getElementById("app")||document.body,{childList:true,subtree:true});
 let t=null;
 document.addEventListener("touchstart",e=>{if(!mob())return;const el=e.target.closest(SH);if(!el)return;const r=el.getBoundingClientRect(),y=e.touches[0].clientY;if(y-r.top>40)return;t={el,y0:y,dy:0};el.style.transition="none";},{passive:true});
