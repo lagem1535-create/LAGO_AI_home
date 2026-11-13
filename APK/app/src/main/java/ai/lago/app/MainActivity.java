@@ -1,15 +1,18 @@
 package ai.lago.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Message;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -23,6 +26,8 @@ public class MainActivity extends Activity {
     static final String APP_URL = "https://lago-ai-home.lagem1535.workers.dev";
     static final String APP_HOST = "lago-ai-home.lagem1535.workers.dev";
     static final int PICK = 41;
+    static final int MIC = 42;
+    PermissionRequest micReq;
 
     WebView web;
     Dialog popup;
@@ -58,6 +63,16 @@ public class MainActivity extends Activity {
         try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (ActivityNotFoundException e) { /* 열 앱이 없어요 */ }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(code, perms, res);
+        if (code != MIC || micReq == null) return;
+        PermissionRequest r = micReq;
+        micReq = null;
+        if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) r.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+        else r.deny();
+    }
+
     class Client extends WebViewClient {
         @Override
         public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
@@ -78,6 +93,27 @@ public class MainActivity extends Activity {
     }
 
     class Chrome extends WebChromeClient {
+        // 음성 입력: LAGO 화면이 마이크를 요청할 때만, 기기 권한을 받은 뒤 허락해요
+        @Override
+        public void onPermissionRequest(final PermissionRequest req) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Uri o = req.getOrigin();
+                    boolean mic = false;
+                    for (String r : req.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) mic = true;
+                    if (!mic || o == null || !APP_HOST.equals(o.getHost())) { req.deny(); return; }
+                    if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        req.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                    } else {
+                        if (micReq != null) micReq.deny();
+                        micReq = req;
+                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC);
+                    }
+                }
+            });
+        }
+
         @Override
         public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
             if (fileCb != null) fileCb.onReceiveValue(null);

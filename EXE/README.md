@@ -1,3 +1,5 @@
+> 0.4.0부터 데스크톱 앱은 Rust 판(`RUST/`)으로 빌드해요. 이 폴더는 예전 Electron 판(0.3.x) 소스로만 남겨 둬요.
+
 # LAGO Desktop (Windows · Mac)
 
 LAGO 웹앱(https://lago-ai-home.lagem1535.workers.dev)을 창으로 열고, 웹에서는 못 하는 일을 더해 주는 Windows 앱이에요.

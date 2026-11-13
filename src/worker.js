@@ -1029,6 +1029,29 @@ async function secApi(req, env, url, p) {
   }
   return json({ error: "없는 주소예요" }, 404);
 }
+// ---------- 음성 → 글 (받아쓰기) : 로그인한 사용자의 녹음을 Workers AI(Whisper)로 글로 옮겨요. 녹음은 저장하지 않아요 ----------
+async function stt(req, env, url) {
+  const origin = req.headers.get("origin");
+  if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);
+  if (!env.AI) return json({ error: "음성 인식이 아직 연결되지 않았어요" }, 503);
+  const u = await tokenUser(req, env);
+  if (!u) return json({ error: "로그인이 필요해요" }, 401);
+  if (limited("stt:" + u.localId, 30, 10 * 60 * 1000)) return json({ error: "음성 입력을 너무 자주 썼어요. 잠시 뒤에 다시 해 주세요" }, 429);
+  const len = Number(req.headers.get("content-length") || 0);
+  if (len > 6 * 1024 * 1024) return json({ error: "녹음이 너무 길어요 (2분까지)" }, 413);
+  const buf = new Uint8Array(await req.arrayBuffer());
+  if (buf.length < 800) return json({ text: "" });
+  if (buf.length > 6 * 1024 * 1024) return json({ error: "녹음이 너무 길어요 (2분까지)" }, 413);
+  let b64 = ""; for (let i = 0; i < buf.length; i += 0x6000) b64 += btoa(String.fromCharCode.apply(null, buf.subarray(i, i + 0x6000)));
+  const lang = url.searchParams.get("lang") === "en" ? "en" : "ko";
+  try {
+    const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio: b64, language: lang, vad_filter: true });
+    return json({ text: String((r && r.text) || "").trim() }, 200, { "cache-control": "no-store" });
+  } catch (e) {
+    return json({ error: "음성을 글로 옮기지 못했어요. 잠시 뒤에 다시 해 주세요" }, 502);
+  }
+}
+
 async function tokenUser(req, env) {
   const tok = (req.headers.get("authorization") || "").replace(/^Bearer /, "");
   let apiKey;
@@ -1537,6 +1560,7 @@ export default {
       if (p === "/api/kid-consent") return req.method === "POST" ? (bump(env, ctx, "kidConsent"), await kidConsent(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (p.startsWith("/api/share") || p.startsWith("/api/tools/") || p.startsWith("/api/html/") || p.startsWith("/api/dev/")) return await shareTools(req, env, url, ctx, p);
       if (p === "/api/news") { const rep = []; const refs = await newsRefs(url.searchParams.get("q") || "오늘 뉴스", rep); return json({ feeds: rep, found: refs.length, refs: refs.map((x) => ({ title: x.title, publisher: x.publisher, date: x.date, url: x.url })) }, 200, { "cache-control": "no-store" }); }
+      if (p === "/api/stt") return req.method === "POST" ? await stt(req, env, url) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/chat") return req.method === "POST" ? await chat(req, env, url, ctx) : json({ error: "POST만 돼요" }, 405);
       if (p === "/api/notify") return req.method === "POST" ? (bump(env, ctx, "notify"), await notify(req, env, url, ctx)) : json({ error: "POST만 돼요" }, 405);
       if (req.method !== "GET") return json({ error: "GET만 돼요" }, 405);

@@ -864,6 +864,20 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(0,0,0,v
 #srchov>.srchbox{margin:0!important;border-radius:0 0 22px 22px!important;max-height:80dvh;padding:env(safe-area-inset-top,0px) 0 0!important;animation:sheetDown .26s cubic-bezier(.2,.8,.2,1);box-shadow:0 10px 40px rgba(0,0,0,.18)}
 #srchov>.srchbox::before{display:none!important}
 }
+/* ==VOICE== 음성 받아쓰기: 녹음하는 동안 아래 도구 줄 대신 파형 줄을 보여 줘요 */
+.composer.rec>.tools,.composer.rec>.selrow{display:none}
+.vbar{display:flex;align-items:center;gap:10px;min-height:36px;animation:vIn .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes vIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.vbar .vwave{flex:1 1 0;min-width:0;height:34px;display:block}
+.vbar .vtime{font-size:calc(13px*var(--ui,1));font-variant-numeric:tabular-nums;color:var(--mut);min-width:34px;text-align:right;white-space:nowrap}
+.vbar .vdot{width:9px;height:9px;border-radius:50%;background:#E5484D;flex:none;animation:vPulse 1.2s ease-in-out infinite}
+@keyframes vPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+.vbar.busy .vdot{background:var(--mut3);animation:none}.vbar.busy .vwave{opacity:.35}.vbar.busy button{opacity:.4;pointer-events:none}
+.vbar.busy .vtime{color:var(--ink2)}
+.composer.rec{border-color:var(--blue);box-shadow:0 6px 24px rgba(37,99,235,.14)}
+.shell.code .composer.rec{border-color:var(--g);box-shadow:0 6px 24px rgba(22,163,74,.14)}
+.micb{flex:none;border-color:transparent;background:none}
+html[data-nomo] .vbar,html[data-nomo] .vdot{animation:none}
 /* ==DARK-GEN-START== */
 
 :root[data-lago=dark]{color-scheme:dark;--bg:#14161C;--card:#1D2028;--side:#181B21;--line:#2E3441;--ink:#E7EAF3;--ink2:#C5CBDA;--mut:#9CA5BA;--mut2:#8A93A9;--mut3:#7B849A;--blue:#8FAAF5;--sky:#7FA2FF;--mist:#212A45;--sel:#283766;--gbg:#14201A;--gt:#1B2E24;--gline:#27402F;--gside:#17241D;--kt:#16293B;--warnbg:#33231B;--g:#4CC585;--gd:#BDE8D0;--kd:#8CC6F2;--err:#F07468;--warn:#E08A62}
@@ -1072,6 +1086,8 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(0,0,0,v
 :root[data-lago=dark] .chev{color:var(--mut,#A6B0BF)}
 :root[data-lago=dark] .shav{background:#3B62D6}
 :root[data-lago=dark] .shav.alt{background:#292F3D}
+:root[data-lago=dark] .vbar .vdot{background:#9B6365}
+:root[data-lago=dark] .composer.rec{border-color:#3B62D6}
 :root[data-lago=dark] [style*="background:#fde8e4" i],:root[data-lago=dark] [style*="background: #fde8e4" i]{background:#382724 !important}
 :root[data-lago=dark] [style*="color:#c0392b" i],:root[data-lago=dark] [style*="color: #c0392b" i]{color:#E38B82 !important}
 :root[data-lago=dark] [style*="background:#eef2f8" i],:root[data-lago=dark] [style*="background: #eef2f8" i]{background:#232A35 !important}

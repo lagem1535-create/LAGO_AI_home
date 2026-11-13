@@ -1,0 +1,18 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LAGO</title>
+<style>html{color-scheme:light dark}body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;background:#fff;color:#111A33}
+main{text-align:center;display:grid;gap:12px;padding:24px;max-width:420px}b{font-size:30px;letter-spacing:.04em;color:#0B2A6F}
+p{margin:0;color:#56627A;line-height:1.6}button{justify-self:center;border:0;border-radius:11px;padding:10px 20px;font:600 15px inherit;color:#fff;background:#2563EB;cursor:pointer}
+.dots{display:flex;gap:6px;justify-content:center}.dots i{width:7px;height:7px;border-radius:50%;background:#2563EB;animation:d 1s ease-in-out infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes d{0%,100%{opacity:.25}50%{opacity:1}}
+@media (prefers-color-scheme:dark){body{background:#14161C;color:#E7EAF3}b{color:#E7ECFF}p{color:#9CA5BA}}</style></head>
+<body><main><b>LAGO</b><div class="dots" id="ld"><i></i><i></i><i></i></div>
+<div id="off" hidden><p>인터넷에 연결하지 못했어요.<br>연결을 확인하고 다시 시도해 주세요.</p><br><button id="r">다시 시도</button></div></main>
+<script>
+// 먼저 연결을 확인하고 LAGO 화면으로 넘어가요. 안 되면 여기서 안내해요.
+var APP="https://lago-ai-home.lagem1535.workers.dev/";
+function go(){document.getElementById("off").hidden=true;document.getElementById("ld").hidden=false;
+  var done=false,t=setTimeout(function(){if(!done){done=true;fail();}},12000);
+  fetch(APP+"api/update",{mode:"no-cors",cache:"no-store"}).then(function(){if(done)return;done=true;clearTimeout(t);location.replace(APP);}).catch(function(){if(done)return;done=true;clearTimeout(t);fail();});}
+function fail(){document.getElementById("ld").hidden=true;document.getElementById("off").hidden=false;}
+document.getElementById("r").onclick=go;addEventListener("online",go);go();
+</script></body></html>

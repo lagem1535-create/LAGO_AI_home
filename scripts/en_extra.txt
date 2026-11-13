@@ -198,3 +198,16 @@ IP와 대략적인 지역은 접속할 때마다 서버가 남겨요. 90일 동�
 그 주소로 로그인한 사람만 열 수 있어요=>Only people signed in with that email can open it
 퍼가기 코드(iframe) 복사=>Copy embed code (iframe)
 처리하는 중…=>Working…
+음성으로 입력=>Voice input
+녹음 취소=>Cancel recording
+받아쓰기 끝내기=>Finish dictation
+듣고 있어요… 말을 마치면 ✓ 를 눌러요=>Listening… press ✓ when you finish
+글로 옮기는 중…=>Transcribing…
+내용을 확인하고 보내 주세요=>Check the text, then send
+너무 짧아요. 조금 더 길게 말해 주세요=>Too short. Please speak a little longer
+말소리를 알아듣지 못했어요. 다시 말해 주세요=>Couldn't catch that. Please try again
+마이크를 찾지 못했어요=>No microphone found
+마이크를 쓸 수 없어요. 마이크 권한을 허용해 주세요=>Can't use the microphone. Please allow microphone access
+이 기기에서는 음성 입력을 쓸 수 없어요=>Voice input isn't available on this device
+미리보기에서는 음성을 글로 옮길 수 없어요=>The preview can't transcribe voice
+음성을 글로 옮기지 못했어요=>Couldn't transcribe the audio

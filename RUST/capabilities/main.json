@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "LAGO 주소에서 열린 화면만 데스크톱 기능(폴더 · 실행 · 저장 · 업데이트)을 쓸 수 있어요",
+  "windows": ["main"],
+  "remote": { "urls": ["https://lago-ai-home.lagem1535.workers.dev/*"] },
+  "permissions": [
+    "allow-pick", "allow-current", "allow-list", "allow-read", "allow-write", "allow-run",
+    "allow-upd-check", "allow-upd-download", "allow-upd-install"
+  ]
+}
