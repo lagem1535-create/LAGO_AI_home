@@ -23,18 +23,18 @@ const V={on:false,busy:false,stream:null,rec:null,chunks:[],ac:null,an:null,raf:
 const vFmt=s=>Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0");
 function vSet(text){const q=$("#q");if(!q)return;q.value=(V.base?V.base.replace(/\s+$/,"")+" ":"")+text;q.dispatchEvent(new Event("input",{bubbles:true}));q.scrollTop=q.scrollHeight;}
 function vMount(){const f=$("#composer");if(!f)return;f.classList.add("rec");let b=f.querySelector(".vbar");
-if(!b){b=document.createElement("div");b.className="vbar";b.innerHTML=`<button type="button" class="round" data-act="micX" aria-label="녹음 취소">${ic("x",17)}</button><span class="vdot" aria-hidden="true"></span><canvas class="vwave" aria-hidden="true"></canvas><span class="vtime" role="timer">0:00</span><button type="button" class="send vok" data-act="micOk" aria-label="받아쓰기 끝내기">${ic("check",18)}</button>`;f.appendChild(b);}
+if(!b){b=document.createElement("div");b.className="vbar";b.innerHTML=`<button type="button" class="vx" data-act="micX" aria-label="녹음 취소">${ic("x",17)}</button><canvas class="vwave" aria-hidden="true"></canvas><span class="vtime" role="timer">0:00</span><button type="button" class="send vok" data-act="micOk" aria-label="받아쓰기 끝내기">${ic("check",18)}</button>`;f.appendChild(b);}
 b.classList.toggle("busy",V.busy);const q=$("#q");if(q&&V.on&&!V.busy)q.placeholder="듣고 있어요… 말을 마치면 ✓ 를 눌러요";}
 function vUnmount(){const f=$("#composer");if(!f)return;f.classList.remove("rec");const b=f.querySelector(".vbar");if(b)b.remove();}
 function vDraw(){V.raf=requestAnimationFrame(vDraw);const cv=document.querySelector(".vwave");if(!cv||!V.an)return;
-const now=performance.now();if(now-V.last>55){V.last=now;const buf=new Uint8Array(V.an.fftSize);V.an.getByteTimeDomainData(buf);let s=0;for(let i=0;i<buf.length;i++){const x=(buf[i]-128)/128;s+=x*x;}V.bars.push(Math.min(1,Math.sqrt(s/buf.length)*3.4));if(V.bars.length>400)V.bars.shift();
+const now=performance.now();if(now-V.last>55){V.last=now;const buf=new Uint8Array(V.an.fftSize);V.an.getByteTimeDomainData(buf);let s=0;for(let i=0;i<buf.length;i++){const x=(buf[i]-128)/128;s+=x*x;}const lv=Math.min(1,Math.sqrt(s/buf.length)*3.2);V.lv=Math.max(lv,(V.lv||0)*.6);V.bars.push(V.lv);if(V.bars.length>400)V.bars.shift();
 const tm=document.querySelector(".vtime");const sec=(Date.now()-V.t0)/1000;if(tm)tm.textContent=vFmt(sec);if(sec>=120){vStop(true);return;}}
 const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;if(!w||!h)return;if(cv.width!==Math.round(w*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
 const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);const ok=document.querySelector(".vok");g.fillStyle=ok?getComputedStyle(ok).backgroundColor:"#2563EB";
-const bw=3,gap=2.5,n=Math.floor(w/(bw+gap));for(let i=0;i<n;i++){const v=V.bars[V.bars.length-1-i];const x=w-(i+1)*(bw+gap);const hh=v==null?2:Math.max(2,v*(h-4));g.globalAlpha=v==null?.22:.35+.65*Math.min(1,v*1.6);const y=(h-hh)/2;if(g.roundRect){g.beginPath();g.roundRect(x,y,bw,hh,1.5);g.fill();}else g.fillRect(x,y,bw,hh);}g.globalAlpha=1;}
+const bw=2.5,gap=2.5,n=Math.floor(w/(bw+gap));for(let i=0;i<n;i++){const v=V.bars[V.bars.length-1-i];const x=w-(i+1)*(bw+gap);const hh=v==null?2.5:Math.max(2.5,v*(h-6));g.globalAlpha=(v==null?.25:.45+.55*Math.min(1,v*1.8))*Math.min(1,(x+bw)/42);const y=(h-hh)/2;if(g.roundRect){g.beginPath();g.roundRect(x,y,bw,hh,1.25);g.fill();}else g.fillRect(x,y,bw,hh);}g.globalAlpha=1;}
 async function vStart(){if(V.on||V.busy)return;if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder){toast("이 기기에서는 음성 입력을 쓸 수 없어요");return;}
 let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});}catch(e){toast(e&&e.name==="NotFoundError"?"마이크를 찾지 못했어요":"마이크를 쓸 수 없어요. 마이크 권한을 허용해 주세요");return;}
-V.stream=st;V.on=true;V.chunks=[];V.bars=[];V.t0=Date.now();V.srText="";V.srFinal="";V.sr=null;const q=$("#q");V.base=q?q.value:"";V.ph=q?q.placeholder:"";
+V.stream=st;V.on=true;V.chunks=[];V.bars=[];V.t0=Date.now();V.srText="";V.srFinal="";V.sr=null;V.liveText="";V.lv=0;const q=$("#q");V.base=q?q.value:"";V.ph=q?q.placeholder:"";
 try{const mt=["audio/webm;codecs=opus","audio/webm","audio/mp4"].find(m=>MediaRecorder.isTypeSupported(m));V.rec=new MediaRecorder(st,mt?{mimeType:mt,audioBitsPerSecond:32000}:undefined);V.rec.ondataavailable=e=>{if(e.data&&e.data.size)V.chunks.push(e.data);};V.rec.start(1000);}catch(e){V.rec=null;}
 try{const AC=window.AudioContext||window.webkitAudioContext;V.ac=new AC();V.an=V.ac.createAnalyser();V.an.fftSize=1024;V.ac.createMediaStreamSource(st).connect(V.an);}catch(e){V.an=null;}
 /* 데스크톱 크롬·엣지에서는 말하는 동안 글이 바로 보여요. 그 밖(앱·휴대폰)은 녹음을 끝낸 뒤 서버에서 글로 옮겨요. */
@@ -42,9 +42,14 @@ const SR=window.SpeechRecognition||window.webkitSpeechRecognition,ua=navigator.u
 if(SR&&/Chrome\//.test(ua)&&!/Android|Mobile/.test(ua)&&!window.lagoDesktop){try{const r=new SR();r.lang=S.lang==="en"?"en-US":"ko-KR";r.continuous=true;r.interimResults=true;
 r.onresult=e=>{let fin="",it="";for(let i=0;i<e.results.length;i++){const x=e.results[i];if(x.isFinal)fin+=x[0].transcript;else it+=x[0].transcript;}V.srFinal=fin;V.srText=(fin+it).trim();if(V.on)vSet(V.srText);};
 r.onerror=e=>{if(e.error!=="no-speech"&&e.error!=="aborted")V.sr=null;};r.onend=()=>{if(V.on&&V.sr===r){try{r.start();}catch(e){}}};r.start();V.sr=r;}catch(e){V.sr=null;}}
+clearInterval(V.live);V.liveBusy=false;V.liveSeq=0;if(V.rec&&S.fb&&S.fb.auth&&S.fb.auth.currentUser)V.live=setInterval(vLive,2200);
 vMount();cancelAnimationFrame(V.raf);vDraw();}
+/* 앱 · 휴대폰: 말하는 동안 지금까지 녹음한 것을 몇 초마다 글로 옮겨서 바로 보여 줘요 */
+async function vSend(blob){const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/stt?lang="+(S.lang==="en"?"en":"ko"),{method:"POST",headers:{authorization:"Bearer "+tk,"content-type":(blob.type||"audio/webm").split(";")[0]},body:blob});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("오류 "+r.status));return String(j.text||"").trim();}
+async function vLive(){if(!V.on||V.liveBusy||V.srText||!V.chunks.length)return;V.liveBusy=true;const seq=++V.liveSeq,t0=V.t0;
+try{const t=await vSend(new Blob(V.chunks,{type:(V.rec&&V.rec.mimeType)||"audio/webm"}));if(V.on&&V.t0===t0&&seq===V.liveSeq&&t&&!V.srText){V.liveText=t;vSet(t);}}catch(e){}V.liveBusy=false;}
 function vFree(){cancelAnimationFrame(V.raf);if(V.sr){const r=V.sr;V.sr=null;try{r.onend=null;r.stop();}catch(e){}}if(V.stream)V.stream.getTracks().forEach(t=>t.stop());V.stream=null;if(V.ac){try{V.ac.close();}catch(e){}}V.ac=null;V.an=null;}
-async function vStop(use){if(!V.on||V.busy)return;V.on=false;const q0=$("#q"),hadSR=!!V.sr;
+async function vStop(use){if(!V.on||V.busy)return;V.on=false;clearInterval(V.live);V.liveSeq++;const q0=$("#q"),hadSR=!!V.sr;
 const blobP=new Promise(res=>{const r=V.rec;if(!r||r.state==="inactive"){res(V.chunks.length?new Blob(V.chunks,{type:(r&&r.mimeType)||"audio/webm"}):null);return;}r.onstop=()=>res(new Blob(V.chunks,{type:r.mimeType||"audio/webm"}));try{r.stop();}catch(e){res(null);}});
 const dur=(Date.now()-V.t0)/1000;if(hadSR)await new Promise(r=>setTimeout(r,use?350:0));const txt=V.srText;vFree();const blob=await blobP;V.rec=null;V.chunks=[];
 const fin=()=>{V.busy=false;vUnmount();const q=$("#q");if(q){q.placeholder=V.ph||q.placeholder;}};
@@ -52,9 +57,9 @@ if(!use){if(q0){q0.value=V.base;q0.dispatchEvent(new Event("input",{bubbles:true
 if(txt){vSet(txt);fin();const q=$("#q");if(q)q.focus();toast("내용을 확인하고 보내 주세요");return;}
 if(!blob||dur<.6){fin();toast("너무 짧아요. 조금 더 길게 말해 주세요");return;}
 if(!(S.fb&&S.fb.auth&&S.fb.auth.currentUser)){fin();toast("미리보기에서는 음성을 글로 옮길 수 없어요");return;}
-V.busy=true;vMount();const q=$("#q");if(q)q.placeholder="글로 옮기는 중…";const tm=document.querySelector(".vtime");if(tm)tm.textContent="글로 옮기는 중…";
-try{const tk=await S.fb.auth.currentUser.getIdToken();const r=await fetch("/api/stt?lang="+(S.lang==="en"?"en":"ko"),{method:"POST",headers:{authorization:"Bearer "+tk,"content-type":(blob.type||"audio/webm").split(";")[0]},body:blob});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("오류 "+r.status));const t=String(j.text||"").trim();fin();if(!t){toast("말소리를 알아듣지 못했어요. 다시 말해 주세요");return;}vSet(t);const q2=$("#q");if(q2)q2.focus();toast("내용을 확인하고 보내 주세요");}
-catch(e){fin();toast(e&&e.message?e.message:"음성을 글로 옮기지 못했어요");}}
+V.busy=true;vMount();const q=$("#q");if(q)q.placeholder="글로 옮기는 중…";const tm=document.querySelector(".vtime");if(tm)tm.textContent=V.liveText?"마무리하는 중…":"글로 옮기는 중…";
+try{const t=(await vSend(blob))||V.liveText;fin();if(!t){toast("말소리를 알아듣지 못했어요. 다시 말해 주세요");return;}vSet(t);const q2=$("#q");if(q2)q2.focus();toast("내용을 확인하고 보내 주세요");}
+catch(e){fin();if(V.liveText){vSet(V.liveText);toast("내용을 확인하고 보내 주세요");}else toast(e&&e.message?e.message:"음성을 글로 옮기지 못했어요");}}
 let toastT;function toast(m){const t=$("#toast");const bad=/못|않아요|실패|없어요|안 돼|확인해 주세요|거절/.test(m);t.innerHTML=`<i class="${bad?"bad":""}">${ic(bad?"info":"check",13)}</i><span>${esc(S&&S.lang==="en"?trText(String(m)):m)}</span>`;t.hidden=false;t.style.animation="none";void t.offsetWidth;t.style.animation="";clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2800);}
 async function hash(s){try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("lago:"+s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return "plain:"+s.length}}
 

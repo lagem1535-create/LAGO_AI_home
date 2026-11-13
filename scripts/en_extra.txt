@@ -211,3 +211,4 @@ IP와 대략적인 지역은 접속할 때마다 서버가 남겨요. 90일 동�
 이 기기에서는 음성 입력을 쓸 수 없어요=>Voice input isn't available on this device
 미리보기에서는 음성을 글로 옮길 수 없어요=>The preview can't transcribe voice
 음성을 글로 옮기지 못했어요=>Couldn't transcribe the audio
+마무리하는 중…=>Finishing up…

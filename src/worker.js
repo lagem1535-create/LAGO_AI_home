@@ -1036,7 +1036,7 @@ async function stt(req, env, url) {
   if (!env.AI) return json({ error: "음성 인식이 아직 연결되지 않았어요" }, 503);
   const u = await tokenUser(req, env);
   if (!u) return json({ error: "로그인이 필요해요" }, 401);
-  if (limited("stt:" + u.localId, 30, 10 * 60 * 1000)) return json({ error: "음성 입력을 너무 자주 썼어요. 잠시 뒤에 다시 해 주세요" }, 429);
+  if (limited("stt:" + u.localId, 300, 10 * 60 * 1000)) return json({ error: "음성 입력을 너무 자주 썼어요. 잠시 뒤에 다시 해 주세요" }, 429);
   const len = Number(req.headers.get("content-length") || 0);
   if (len > 6 * 1024 * 1024) return json({ error: "녹음이 너무 길어요 (2분까지)" }, 413);
   const buf = new Uint8Array(await req.arrayBuffer());
