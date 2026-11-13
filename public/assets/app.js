@@ -1428,7 +1428,7 @@ catch(e){if(e&&/user-disabled|user-token-expired/.test(e.code||"")){S.fb.auth.si
 setInterval(()=>document.querySelectorAll("[data-think]").forEach(e=>{const t0=+e.dataset.t0||(e.dataset.t0=Date.now(),+e.dataset.t0),sec=Math.floor((Date.now()-t0)/1000);e.querySelector(".tsec").textContent=sec>=2?sec+"초":"";}),700);
 
 /* ---------- 모바일 바텀시트: 배경 어둡게 + 아래로 끌어 닫기 ---------- */
-(function(){const SH=".pop,.acct:not(.acctwrap),.cmenu,.confirm,.tempask>.card,.tempask>form,.tempask>div:not(.noticebg)";let raf=0;
+(function(){const SH=".pop,.acct:not(.acctwrap),.cmenu,.confirm,.tempask>.card:not(.srchbox),.tempask>form,.tempask>div:not(.noticebg)";let raf=0;
 const mob=()=>matchMedia("(max-width:760px)").matches;
 const upd=()=>{raf=0;const mm=document.querySelector(".main.temp"),tb=mm&&mm.querySelector(":scope>.tempbar");if(mm){const h=tb?tb.offsetHeight:0;if(mm.style.getPropertyValue("--tbh")!==h+"px")mm.style.setProperty("--tbh",h+"px");}const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);if(!on)document.body.style.removeProperty("--dim");document.body.classList.remove("sheet-side");
 if(on){const sh=document.querySelector(".pop,.acct,.cmenu,.confirm");if(sh){const r=sh.getBoundingClientRect(),el=document.elementFromPoint(r.left+r.width/2,Math.min(innerHeight-4,r.top+Math.min(r.height/2,40)));

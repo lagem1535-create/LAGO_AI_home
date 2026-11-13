@@ -856,6 +856,14 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(0,0,0,v
 .shcur[aria-expanded=true] small{display:none}
 .shlink{display:flex;gap:8px;align-items:center}.shlink input{flex:1;min-width:0;font:13px var(--mono)}
 .shembed{justify-self:start}
+/* 검색은 키보드가 올라오니 아래 시트가 아니라 위에서 내려오는 창으로 */
+@keyframes sheetDown{from{transform:translateY(-100%)}to{transform:none}}
+@media (max-width:760px){
+#srchov{align-items:start}
+.tempask{background:rgba(0,0,0,.38)}
+#srchov>.srchbox{margin:0!important;border-radius:0 0 22px 22px!important;max-height:80dvh;padding:env(safe-area-inset-top,0px) 0 0!important;animation:sheetDown .26s cubic-bezier(.2,.8,.2,1);box-shadow:0 10px 40px rgba(0,0,0,.18)}
+#srchov>.srchbox::before{display:none!important}
+}
 /* ==DARK-GEN-START== */
 
 :root[data-lago=dark]{color-scheme:dark;--bg:#14161C;--card:#1D2028;--side:#181B21;--line:#2E3441;--ink:#E7EAF3;--ink2:#C5CBDA;--mut:#9CA5BA;--mut2:#8A93A9;--mut3:#7B849A;--blue:#8FAAF5;--sky:#7FA2FF;--mist:#212A45;--sel:#283766;--gbg:#14201A;--gt:#1B2E24;--gline:#27402F;--gside:#17241D;--kt:#16293B;--warnbg:#33231B;--g:#4CC585;--gd:#BDE8D0;--kd:#8CC6F2;--err:#F07468;--warn:#E08A62}
