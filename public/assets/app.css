@@ -785,13 +785,16 @@ html[data-lago=dark] .shell.code .send,html[data-lago=dark] .shell.code .btn.pri
 .form .btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(11,42,111,.14)}
 .form .btn:active{transform:translateY(0) scale(.985);box-shadow:none}
 @media (prefers-reduced-motion:reduce){.brand,.brand::before,.brand::after,.brand h1,.brand .sub,.brand li,.form>*{animation:none!important}}
+@property --dim{syntax:"<number>";inherits:true;initial-value:.38}
+body{transition:--dim .22s ease;-webkit-tap-highlight-color:transparent}
+button,[data-act],.opt,.shopt{-webkit-tap-highlight-color:transparent}
 /* ==SHEET== 모바일에서는 메뉴·창이 아래에서 올라오는 시트로 */
 @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
 @keyframes sheetBg{from{opacity:0}to{opacity:1}}
 @media (max-width:760px){
 body.sheet-side::after{display:none}
-body.sheet-side .cmenu,body.sheet-side .acct,body.sheet-side .pop,body.sheet-side .confirm{box-shadow:0 0 0 100vmax rgba(17,26,51,.4)!important}
-body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(17,26,51,.42);z-index:89;animation:sheetBg .2s ease}
+body.sheet-side .cmenu,body.sheet-side .acct,body.sheet-side .pop,body.sheet-side .confirm{box-shadow:0 0 0 100vmax rgba(0,0,0,var(--dim))!important}
+body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(0,0,0,var(--dim));z-index:89;animation:sheetBg .2s ease}
 .pop,.cmenu,.acct,.confirm{position:fixed!important;left:0!important;right:0!important;top:auto!important;bottom:0!important;width:auto!important;max-width:none!important;margin:0!important;transform:none;border:0;border-radius:22px 22px 0 0!important;box-shadow:0 -8px 40px rgba(11,31,85,.18)!important;padding:22px 14px calc(14px + env(safe-area-inset-bottom,0px))!important;max-height:80dvh!important;overflow-y:auto;overscroll-behavior:contain;z-index:90!important;animation:sheetUp .26s cubic-bezier(.2,.8,.2,1);background:var(--card,#fff)}
 .pop::before,.cmenu::before,.acct::before,.confirm::before{content:"";position:absolute;top:8px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:4px;background:#D5DCEA;right:auto;bottom:auto;height:4px;display:block}
 .pop.plusp{display:flex;flex-direction:column}

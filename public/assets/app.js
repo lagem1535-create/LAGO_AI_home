@@ -1430,15 +1430,15 @@ setInterval(()=>document.querySelectorAll("[data-think]").forEach(e=>{const t0=+
 /* ---------- 모바일 바텀시트: 배경 어둡게 + 아래로 끌어 닫기 ---------- */
 (function(){const SH=".pop,.acct:not(.acctwrap),.cmenu,.confirm,.tempask>.card,.tempask>form,.tempask>div:not(.noticebg)";let raf=0;
 const mob=()=>matchMedia("(max-width:760px)").matches;
-const upd=()=>{raf=0;const mm=document.querySelector(".main.temp"),tb=mm&&mm.querySelector(":scope>.tempbar");if(mm){const h=tb?tb.offsetHeight:0;if(mm.style.getPropertyValue("--tbh")!==h+"px")mm.style.setProperty("--tbh",h+"px");}const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);document.body.classList.remove("sheet-side");
+const upd=()=>{raf=0;const mm=document.querySelector(".main.temp"),tb=mm&&mm.querySelector(":scope>.tempbar");if(mm){const h=tb?tb.offsetHeight:0;if(mm.style.getPropertyValue("--tbh")!==h+"px")mm.style.setProperty("--tbh",h+"px");}const on=mob()&&!!document.querySelector(".pop,.acct,.cmenu,.confirm");document.body.classList.toggle("sheet-open",on);if(!on)document.body.style.removeProperty("--dim");document.body.classList.remove("sheet-side");
 if(on){const sh=document.querySelector(".pop,.acct,.cmenu,.confirm");if(sh){const r=sh.getBoundingClientRect(),el=document.elementFromPoint(r.left+r.width/2,Math.min(innerHeight-4,r.top+Math.min(r.height/2,40)));
 /* 윗줄·사이드바처럼 층이 낮은 곳 안에 있는 시트는 배경 막이 위를 덮어 버려요 → 막을 끄고 시트 자체의 큰 그림자로 어둡게 */
 if(el&&!sh.contains(el))document.body.classList.add("sheet-side");}}};
 new MutationObserver(()=>{if(!raf)raf=requestAnimationFrame(upd);}).observe(document.getElementById("app")||document.body,{childList:true,subtree:true});
 let t=null;
 document.addEventListener("touchstart",e=>{if(!mob())return;const el=e.target.closest(SH);if(!el)return;const r=el.getBoundingClientRect(),y=e.touches[0].clientY;if(y-r.top>40)return;t={el,y0:y,dy:0};el.style.transition="none";},{passive:true});
-document.addEventListener("touchmove",e=>{if(!t)return;t.dy=Math.max(0,e.touches[0].clientY-t.y0);t.el.style.transform="translateY("+t.dy+"px)";},{passive:true});
-const end=()=>{if(!t)return;const{el,dy}=t;t=null;el.style.transition="transform .2s ease";if(dy>90){el.style.transform="translateY(110%)";const w=el.closest(".tempask");const x=(w&&w.querySelector(".noticebg"))||w||document.body;setTimeout(()=>x.click(),160);}else{el.style.transform="";setTimeout(()=>{el.style.transition="";},220);}};
+document.addEventListener("touchmove",e=>{if(!t)return;t.dy=Math.max(0,e.touches[0].clientY-t.y0);t.el.style.transform="translateY("+t.dy+"px)";document.body.style.transition="none";document.body.style.setProperty("--dim",(.38*(1-Math.min(t.dy/280,1))).toFixed(3));},{passive:true});
+const end=()=>{if(!t)return;const{el,dy}=t;t=null;el.style.transition="transform .2s ease";document.body.style.transition="";if(dy>90){document.body.style.setProperty("--dim","0");el.style.transform="translateY(110%)";const w=el.closest(".tempask");const x=(w&&w.querySelector(".noticebg"))||w||document.body;setTimeout(()=>x.click(),160);}else{document.body.style.removeProperty("--dim");el.style.transform="";setTimeout(()=>{el.style.transition="";},220);}};
 document.addEventListener("touchend",end);document.addEventListener("touchcancel",end);
 document.addEventListener("click",e=>{if(e.target===document.body&&document.body.classList.contains("sheet-open")&&S.confirm){S.confirm=null;render();}},true);
 })();
