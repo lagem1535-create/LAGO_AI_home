@@ -770,6 +770,8 @@ function limited(key, max, ms) {
   return false;
 }
 async function kidConsent(req, env, url, ctx) {
+  // LAGO Goccia(만 14세 미만 계정)는 지금 열려 있지 않아요
+  if (!env.GOCCIA_OPEN) return json({ error: "어린이 계정(LAGO Goccia)은 지금 이용할 수 없어요" }, 403);
   if (!env.RESEND_API_KEY) return json({ error: "메일 보내기가 아직 준비되지 않았어요" }, 503);
   const origin = req.headers.get("origin");
   if (origin && origin !== url.origin) return json({ error: "허용되지 않은 요청이에요" }, 403);

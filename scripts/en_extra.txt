@@ -212,3 +212,5 @@ IP와 대략적인 지역은 접속할 때마다 서버가 남겨요. 90일 동�
 미리보기에서는 음성을 글로 옮길 수 없어요=>The preview can't transcribe voice
 음성을 글로 옮기지 못했어요=>Couldn't transcribe the audio
 마무리하는 중…=>Finishing up…
+지금은 가입할 수 없어요=>You can't sign up right now
+만 14세 미만 어린이 계정(LAGO Goccia)은 아직 열리지 않았어요. 만 14세 이상만 가입할 수 있어요.=>Children's accounts (LAGO Goccia) for under-14s aren't open yet. You must be 14 or older to sign up.
