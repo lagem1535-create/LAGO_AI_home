@@ -490,11 +490,15 @@ async function chat(req, env, url, ctx) {
   const u = await tokenUser(req, env);
   if (!u) return json({ error: "로그인이 필요해요" }, 401);
   const isAdmin = String(u.email || "").toLowerCase() === String(env.ADMIN_EMAIL || ADMIN_DEFAULT).toLowerCase() && !!u.emailVerified;
+  let plan = isAdmin ? "Max" : "Free";
   if (saOf(env) && !isAdmin) {
     const m = await getMod(env, u.localId);
     if (m.banned || (m.tempBan && (m.bannedUntil || 0) > Date.now())) return json({ error: "사용이 제한된 계정이에요" }, 403);
+    if (m.plan) plan = m.plan;
   }
   let b = {}; try { b = await req.json(); } catch {}
+  // CODE는 Pro · Max 요금제에서만 써요 (요금제는 관리자가 정한 값만 믿어요)
+  if (b.task === "code" && plan !== "Pro" && plan !== "Max") return json({ error: "CODE는 Pro · Max 요금제에서 쓸 수 있어요", needPlan: true }, 403);
   const vs = env.ADMIN_KV ? await getVers(env) : { on: [], def: "" };
   const verSel = vs.on.includes(String(b.fver || "")) ? String(b.fver) : vs.def;   // 사용자가 고른 버전(켜 둔 것만), 없으면 기본
   const q = String(b.q || "").trim().slice(0, 500);
