@@ -1,0 +1,16 @@
+rules_version = '2';
+// LAGO Firestore 규칙 — Firebase 콘솔 → Firestore → 규칙 에 그대로 붙여 넣어요.
+// 로그인한 사람이 자기 자리(users/<내 uid>/data/main)만 읽고 쓸 수 있어요. 그 밖은 모두 막아요.
+// (관리자 기능 · 공유 등 서버(Worker)가 하는 일은 서비스 계정으로 해서 이 규칙과 상관없어요)
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/data/main {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+                            && request.resource.data is map;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
