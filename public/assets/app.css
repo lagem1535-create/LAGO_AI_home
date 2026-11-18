@@ -876,6 +876,19 @@ body.sheet-open::after{content:"";position:fixed;inset:0;background:rgba(0,0,0,v
 .vbar.busy .vwave{opacity:.3}.vbar.busy button{opacity:.4;pointer-events:none}
 .micb{flex:none;border-color:transparent;background:none}
 html[data-nomo] .vbar{animation:none}
+/* ==REPLY== 답글: 고른 글 위에 뜨는 버튼 · 입력칸 위 인용 · 대화 속 인용 */
+.replybtn{position:fixed;z-index:120;display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font:inherit;font-size:calc(15px*var(--ui,1));font-weight:600;box-shadow:0 8px 28px rgba(15,23,42,.16);cursor:pointer;animation:rbIn .16s ease-out;-webkit-user-select:none;user-select:none}
+.replybtn:hover{background:var(--mist)}
+@keyframes rbIn{from{opacity:0;transform:translateY(4px) scale(.96)}to{opacity:1;transform:none}}
+.rquote{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:8px 6px 8px 12px;border-radius:12px;background:var(--mist);color:var(--mut);font-size:calc(13.5px*var(--ui,1));min-width:0}
+.rquote .grow{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink2)}
+.rquote>svg{flex:none}.rquote .iconbtn{flex:none;width:30px;height:30px}
+.uquote{display:flex;align-items:flex-start;gap:7px;max-width:min(560px,85%);margin-left:auto;margin-bottom:6px;padding:7px 12px;border-left:3px solid var(--blue);border-radius:4px 10px 10px 4px;background:var(--mist);color:var(--mut);font-size:calc(13px*var(--ui,1));line-height:1.5}
+.uquote>svg{flex:none;margin-top:3px}
+.uquote span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-width:0}
+.shell.code .uquote{border-left-color:var(--g)}
+.am ::selection{background:rgba(37,99,235,.24)}
+html[data-nomo] .replybtn{animation:none}
 /* ==AGEGATE== 만 14세 미만 가입 막기: 휴대폰에서도 아래 시트가 아니라 화면 가운데 창이에요 */
 .agegate{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
 .agegatebg{position:absolute;inset:0;background:rgba(0,0,0,.42);animation:agFade .2s ease}
@@ -1098,7 +1111,9 @@ html[data-nomo] .agecard,html[data-nomo] .agegatebg{animation:none}
 :root[data-lago=dark] .chev{color:var(--mut,#A6B0BF)}
 :root[data-lago=dark] .shav{background:#3B62D6}
 :root[data-lago=dark] .shav.alt{background:#292F3D}
+:root[data-lago=dark] .uquote{border-left:3px solid #3B62D6}
 :root[data-lago=dark] .agecard{background:var(--card,#212121)}
+:root[data-lago=dark] .agecard .ageic.codeic{color:#7DE8A4}
 :root[data-lago=dark] [style*="background:#fde8e4" i],:root[data-lago=dark] [style*="background: #fde8e4" i]{background:#382724 !important}
 :root[data-lago=dark] [style*="color:#c0392b" i],:root[data-lago=dark] [style*="color: #c0392b" i]{color:#E38B82 !important}
 :root[data-lago=dark] [style*="background:#eef2f8" i],:root[data-lago=dark] [style*="background: #eef2f8" i]{background:#232A35 !important}
